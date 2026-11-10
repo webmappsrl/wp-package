@@ -1,0 +1,4 @@
+.DS_Store
+# Build della mappa (map/README.md): dipendenze e componente scaricato; il risultato, assets/dist/, è versionato
+map/node_modules/
+map/vendor/
