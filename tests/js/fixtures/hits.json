@@ -1,0 +1,356 @@
+[
+  {
+    "id": 75,
+    "ref": "G602C",
+    "name": {
+      "it": " Pedras Rujas  - Sa Pala e Sa Trae - Sentiero di San Francesco (G 602 C)",
+      "en": " Pedreas Rujas  - Sa Pala e Sa Trae - San Francesco Trail (G 602 C)"
+    },
+    "taxonomyActivities": [
+      "mtb",
+      "hiking",
+      "horse",
+      "sardegnasentieri:type:sentiero"
+    ],
+    "taxonomyWheres": [
+      "Area G (Nord-EST)",
+      "ZSSG6",
+      "ZSSG5",
+      "Sardegna",
+      "Sassari",
+      "Bottidda"
+    ],
+    "taxonomyIcons": {
+      "mtb": {
+        "label": {
+          "it": "mtb"
+        },
+        "icon_name": null
+      },
+      "hiking": {
+        "label": {
+          "it": "hiking"
+        },
+        "icon_name": null
+      },
+      "horse": {
+        "label": {
+          "it": "horse"
+        },
+        "icon_name": null
+      },
+      "sardegnasentieri:type:sentiero": {
+        "label": {
+          "it": "Sentiero"
+        },
+        "icon_name": "txn-hiking"
+      }
+    },
+    "terms": {
+      "hiking-difficulty": [
+        {
+          "identifier": "sardegnasentieri:tid:4066",
+          "name": {
+            "it": "T"
+          },
+          "pivot_properties": []
+        }
+      ],
+      "route-type": [
+        {
+          "identifier": "route-type-trail",
+          "name": {
+            "it": "Sentiero"
+          },
+          "pivot_properties": []
+        }
+      ]
+    },
+    "distance": 0,
+    "ascent": 0,
+    "duration_forward": 0,
+    "feature_image": "https://forestas.dev.maphub.it/wmfe/forestasdev/1/media/68552/conversions/Sentiero_20G_20602_20C_3-thumbnail_400_200.jpg"
+  },
+  {
+    "id": 80,
+    "ref": "700",
+    "name": {
+      "it": "Bau 'e Jacca - Genna Eragas (T-700)",
+      "en": "Girgini (T-700)"
+    },
+    "taxonomyActivities": [
+      "hiking",
+      "horse",
+      "sardegnasentieri:type:sentiero"
+    ],
+    "taxonomyWheres": [
+      "Area T (Centrale)",
+      "ZNUT7",
+      "Sardegna",
+      "Nuoro",
+      "Ogliastra",
+      "Arzana",
+      "Desulo"
+    ],
+    "taxonomyIcons": {
+      "hiking": {
+        "label": {
+          "it": "hiking"
+        },
+        "icon_name": null
+      },
+      "horse": {
+        "label": {
+          "it": "horse"
+        },
+        "icon_name": null
+      },
+      "sardegnasentieri:type:sentiero": {
+        "label": {
+          "it": "Sentiero"
+        },
+        "icon_name": "txn-hiking"
+      }
+    },
+    "terms": {
+      "hiking-difficulty": [
+        {
+          "identifier": "sardegnasentieri:tid:4066",
+          "name": {
+            "it": "T"
+          },
+          "pivot_properties": []
+        }
+      ],
+      "route-type": [
+        {
+          "identifier": "route-type-trail",
+          "name": {
+            "it": "Sentiero"
+          },
+          "pivot_properties": []
+        }
+      ],
+      "warnings": [
+        {
+          "identifier": "sardegnasentieri:warning:4719",
+          "name": {
+            "en": "aggressive sheepdogs",
+            "it": "Cani aggressivi"
+          },
+          "pivot_properties": []
+        },
+        {
+          "identifier": "sardegnasentieri:warning:4720",
+          "name": {
+            "en": "fogginess",
+            "it": "Rischio nebbia"
+          },
+          "pivot_properties": []
+        },
+        {
+          "identifier": "sardegnasentieri:warning:4974",
+          "name": {
+            "en": "winter snow",
+            "it": "Rischio neve"
+          },
+          "pivot_properties": []
+        },
+        {
+          "identifier": "sardegnasentieri:warning:4975",
+          "name": {
+            "en": "exposure to strong winds",
+            "it": "Rischio vento"
+          },
+          "pivot_properties": []
+        }
+      ]
+    },
+    "distance": 0,
+    "ascent": 0,
+    "duration_forward": 0,
+    "feature_image": "https://forestas.dev.maphub.it/wmfe/forestasdev/1/media/68576/conversions/garofano_20selvatico-thumbnail_400_200.jpg"
+  },
+  {
+    "id": 109,
+    "ref": "",
+    "name": {
+      "it": " 'Untanas de Su Tassu - Su Tassu (G 111B)"
+    },
+    "taxonomyActivities": [
+      "mtb",
+      "hiking",
+      "sardegnasentieri:type:sentiero"
+    ],
+    "taxonomyWheres": [
+      "Area G (Nord-EST)",
+      "ZNUG1",
+      "Sardegna",
+      "Nuoro",
+      "Siniscola"
+    ],
+    "taxonomyIcons": {
+      "mtb": {
+        "label": {
+          "it": "mtb"
+        },
+        "icon_name": null
+      },
+      "hiking": {
+        "label": {
+          "it": "hiking"
+        },
+        "icon_name": null
+      },
+      "sardegnasentieri:type:sentiero": {
+        "label": {
+          "it": "Sentiero"
+        },
+        "icon_name": "txn-hiking"
+      }
+    },
+    "terms": {
+      "route-type": [
+        {
+          "identifier": "route-type-trail",
+          "name": {
+            "it": "Sentiero"
+          },
+          "pivot_properties": []
+        }
+      ],
+      "hiking-difficulty": [
+        {
+          "identifier": "sardegnasentieri:tid:4067",
+          "name": {
+            "it": "E"
+          },
+          "pivot_properties": []
+        }
+      ]
+    },
+    "distance": 0,
+    "ascent": 0,
+    "duration_forward": 0,
+    "feature_image": "https://forestas.dev.maphub.it/wmfe/forestasdev/1/media/68624/conversions/1-thumbnail_400_200.jpg"
+  },
+  {
+    "id": 311,
+    "ref": "",
+    "name": {
+      "it": "\tCMSB - TAPPA 04 – DA BUGGERRU A PORTIXEDDU",
+      "en": "\tCMSB - STAGE 04 – FROM BUGGERRU TO PORTIXEDDU"
+    },
+    "taxonomyActivities": [
+      "sardegnasentieri:type:itinerario",
+      "sardegnasentieri:cammino"
+    ],
+    "taxonomyWheres": [
+      "ZSUD1",
+      "ZSUD3",
+      "Area D (Sud-OVEST)",
+      "Sardegna",
+      "Sulcis Iglesiente",
+      "Buggerru",
+      "Fluminimaggiore"
+    ],
+    "taxonomyIcons": {
+      "sardegnasentieri:type:itinerario": {
+        "label": {
+          "it": "Itinerario"
+        },
+        "icon_name": "txn-trail"
+      },
+      "sardegnasentieri:cammino": {
+        "label": {
+          "it": "Cammini di Sardegna"
+        },
+        "icon_name": null
+      }
+    },
+    "terms": {
+      "itinerary-type": [
+        {
+          "identifier": "sardegnasentieri:tid:4725",
+          "name": {
+            "it": "Itinerari escursionistici di lunga percorrenza (a tappe)"
+          },
+          "pivot_properties": []
+        },
+        {
+          "identifier": "sardegnasentieri:tid:4732",
+          "name": {
+            "it": "Passeggiate Geo-Minerarie"
+          },
+          "pivot_properties": []
+        }
+      ],
+      "soft-mobility-difficulty": [
+        {
+          "identifier": "sardegnasentieri:tid:4917",
+          "name": {
+            "it": "Medio"
+          },
+          "pivot_properties": []
+        }
+      ],
+      "route-type": [
+        {
+          "identifier": "route-type-walk",
+          "name": {
+            "it": "Cammino"
+          },
+          "pivot_properties": []
+        }
+      ]
+    },
+    "distance": 0,
+    "ascent": 0,
+    "duration_forward": 0,
+    "feature_image": "https://forestas.dev.maphub.it/wmfe/forestasdev/1/media/69443/conversions/Buggerru_2C_20panorama-thumbnail_400_200.jpg"
+  },
+  {
+    "id": 529,
+    "ref": "510",
+    "name": {
+      "it": "Alamoiu: Ponte Oddimoro - Riserva Naturale Assai T-510",
+      "en": "Alamoiu: Ponte Oddimoro - Assai Nature Reserve T-510"
+    },
+    "taxonomyActivities": [
+      "horse",
+      "trekking",
+      "sardegnasentieri:type:sentiero"
+    ],
+    "taxonomyWheres": [
+      "Area T (Centrale)",
+      "ZORT5",
+      "Sardegna",
+      "Oristano",
+      "Nughedu Santa Vittoria"
+    ],
+    "taxonomyIcons": {
+      "horse": {
+        "label": {
+          "it": "horse"
+        },
+        "icon_name": null
+      },
+      "trekking": {
+        "label": {
+          "it": "trekking"
+        },
+        "icon_name": null
+      },
+      "sardegnasentieri:type:sentiero": {
+        "label": {
+          "it": "Sentiero"
+        },
+        "icon_name": "txn-hiking"
+      }
+    },
+    "distance": 0,
+    "ascent": 0,
+    "duration_forward": 0,
+    "feature_image": "https://forestas.dev.maphub.it/wmfe/forestasdev/1/media/70326/conversions/nughedu_santa_vittoria_-_chiesa_di_san_giacomo_01-thumbnail_400_200.jpg"
+  }
+]

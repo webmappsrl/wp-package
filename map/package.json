@@ -1,0 +1,22 @@
+{
+  "name": "wp-package-map",
+  "private": true,
+  "description": "Build della mappa di wp-package: il componente FeatureCollectionMap di wm-package (Vue 3 e OpenLayers) in un file solo per WordPress",
+  "license": "GPL-2.0-or-later",
+  "type": "module",
+  "config": {
+    "wmPackageRef": "f05142f7be6a1d5831b5a8c7b192d2bc43f3a333"
+  },
+  "scripts": {
+    "component": "sh scripts/scarica-componente.sh",
+    "build": "npm run component && vite build"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.4",
+    "chart.js": "4.6.1",
+    "html2canvas": "1.4.1",
+    "ol": "9.2.4",
+    "vite": "5.4.21",
+    "vue": "3.5.45"
+  }
+}
