@@ -1,0 +1,83 @@
+/* Regole della mappa di wp-package sopra quelle del componente (vengono dopo nel file compilato). */
+
+/* «Caricamento mappa...» del componente è solo in italiano: resta la rotella, l'avanzamento lo scrive la pagina */
+.wmwp-map .loading-text {
+	display: none;
+}
+
+/* Focus della mappa (si sposta con le frecce): il contorno sta dentro, il contenitore del componente taglia quello che
+   esce. --wmwp-focus lo dà il tema */
+.wmwp-map [data-wmwp-map-surface]:focus-visible {
+	outline: 3px solid var(--wmwp-focus, #005fcc);
+	outline-offset: -3px;
+}
+
+/* Tooltip al passaggio del mouse: il puntatore ci può passare sopra (WCAG 1.4.13; il componente lo ha trasparente agli
+   eventi) */
+.wmwp-map [data-wmwp-map-tooltip] {
+	pointer-events: auto;
+}
+
+/* Fondo della mappa mentre arrivano le tile, come nel campo Nova (resources/sass/field.scss) */
+.wmwp-map .map-container {
+	background: #f3f4f6;
+}
+
+/* Icona del pulsante dello schermo intero (il testo predefinito di OpenLayers è una lettera) */
+.wmwp-map .ol-full-screen button svg {
+	display: block;
+	width: 1em;
+	height: 1em;
+	margin: auto;
+}
+
+/* Riquadro sul punto cliccato (opzione popup): forma di base, il tema ne cambia l'aspetto */
+.wmwp-map-popup {
+	position: relative;
+	width: 260px;
+	max-width: calc(100vw - 48px);
+	padding: 0;
+	background: #fff;
+	border-radius: 4px;
+	box-shadow: 0 4px 18px rgba(0, 0, 0, .28);
+}
+.wmwp-map-popup::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: -8px;
+	margin-left: -8px;
+	border: 8px solid transparent;
+	border-bottom: 0;
+	border-top-color: #fff;
+}
+.wmwp-map-popup__close {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 1;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, .92);
+	color: #1A1A1A;
+	font: 400 22px/32px sans-serif;
+	cursor: pointer;
+}
+/* flow-root: il margine in fondo all'ultimo elemento resta dentro il riquadro invece di uscirne (margin collapsing),
+   altrimenti il fondo bianco finisce a filo del contenuto e il pulsante sembra tagliato */
+.wmwp-map-popup__content {
+	display: flow-root;
+}
+.wmwp-map-popup__content ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+/* Il riquadro sta sopra i controlli di OpenLayers (+/−, schermo intero): su un telefono li incrocia, e senza questo
+   il pulsante per chiuderlo restava sotto il «+» */
+.wmwp-map .ol-overlay-container:has(.wmwp-map-popup) {
+	z-index: 3;
+}

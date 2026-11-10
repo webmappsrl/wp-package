@@ -1,0 +1,4 @@
+[submodule "map/wm-package"]
+	path = map/wm-package
+	url = https://github.com/webmappsrl/wm-package
+	branch = main

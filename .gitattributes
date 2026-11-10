@@ -1,0 +1,7 @@
+# Fuori dall'archivio del repo (git archive e tarball di GitHub, da cui si installa il plugin): test e sorgente della
+# mappa non servono al plugin installato, la mappa compilata è in assets/dist
+/tests export-ignore
+/map export-ignore
+/.gitattributes export-ignore
+/.gitmodules export-ignore
+/.gitignore export-ignore
