@@ -7,23 +7,36 @@ e OpenLayers 9) compilato in un file solo con Vite, con `src/index.js` che lo mo
 wm-package.
 
 ```bash
+git submodule update --init map/wm-package   # una volta, dopo il clone (o git clone --recursive)
 cd map
 npm install      # Node 18 o successivo
-npm run build    # scarica il componente (se serve) e scrive ../assets/dist/
+npm run build    # scrive ../assets/dist/
 ```
 
 ## Il componente di wm-package
 
-Il componente si usa com'è, senza copiarlo nel plugin e senza modificarlo. `npm run build` scarica da GitHub solo la
-sua cartella, al commit scritto in `package.json` (`config.wmPackageRef`), in `vendor/wm-package/`
-(`scripts/scarica-componente.sh`, ignorata da git): un commit uguale non si riscarica. Per portare la mappa a una
-versione più recente del componente si cambia `wmPackageRef` con l'hash di un commit di `main` di wm-package, poi
-`npm run build`, e si controlla la mappa della ricerca nel browser.
+Il componente si usa com'è, senza copiarlo nel plugin e senza modificarlo: viene dal submodule `map/wm-package`
+(scrum del 10/11, 14:15, Giuseppe: «gli dobbiamo inserire il submodule wm-package. È da lì che si va a prendere tutto
+il codice. Non gli mettere un URL»). La versione del componente è il commit del submodule (oggi `f05142f7`, `main` di
+wm-package); `.gitmodules` segue `main`. Per una versione nuova:
+
+```bash
+git submodule update --remote map/wm-package   # o git -C map/wm-package checkout <commit>
+cd map && npm run build
+```
+
+poi si prova la mappa della ricerca nel browser e si committano insieme il submodule e `assets/dist/`. Se il submodule
+manca, `npm run build` si ferma con «Manca il submodule wm-package». WordPress non ne ha bisogno: usa il compilato in
+`assets/dist/` (l'archivio di GitHub che scarica l'installazione non contiene i submodule).
 
 wm-package non è una dipendenza npm perché il suo `package.json` porta con sé `chartjs-node-canvas` e quindi `canvas`,
-un modulo nativo che qui non serve (con la dipendenza da GitHub l'installazione era di 113 MB e 9 minuti; così è di 10
-secondi). Le dipendenze del componente (`vue`, `ol`, `chart.js`, `html2canvas`) sono in `devDependencies` alle
-versioni del suo `package.json` in wm-package.
+un modulo nativo che qui non serve (con la dipendenza da GitHub l'installazione era di 113 MB e 9 minuti). Le
+dipendenze del componente (`vue`, `ol`, `chart.js`, `html2canvas`) sono in `devDependencies` alle versioni del suo
+`package.json` in wm-package: aggiornando il submodule vanno ricontrollate.
+
+Il compilato cambia anche solo perché cambia il percorso dei file: Vue e il minificatore calcolano dal percorso alcuni
+nomi (`data-v-…`, variabili di `v-bind`, nomi brevi del JS). Due build dello stesso commit da cartelle diverse hanno
+la stessa lunghezza ma non gli stessi byte: si confrontano nel browser.
 
 ## Cosa aggiunge la build
 

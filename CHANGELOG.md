@@ -22,6 +22,7 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le ve
   (`wp_package_map_tiles`), percorsi nel colore del loro layer (`wp_package_map_layer_colors`), riquadro con la
   card al clic sulla mappa (`popup` in `mount()`, `map.card()` della source) e pulsante per la selezione nel riquadro
   (oc:8952).
+- Il componente della mappa viene dal submodule `map/wm-package` (non più scaricato da GitHub dalla build) (oc:8952).
 - `assets/js/track-api.js`: tracce da `api/ec/track/multiple` per scarico e mappa, con la cache per id (oc:8952).
 
 ### Cambiato

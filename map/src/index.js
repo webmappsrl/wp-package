@@ -1,8 +1,8 @@
 /*
  * Mappa di wp-package (oc:8952): il componente FeatureCollectionMap di wm-package (Vue 3 e OpenLayers, il campo Nova
  * delle mappe di tracce e POI) compilato in un file solo, `assets/dist/wp-package-map.js`, che espone
- * `window.wmWpMap`. Il componente si usa com'è, senza modifiche: la cartella arriva da GitHub al commit scritto in
- * package.json (scripts/scarica-componente.sh). La ricerca, lo shortcode [wp_package_map] e ogni altra pagina
+ * `window.wmWpMap`. Il componente si usa com'è, senza modifiche, dal submodule map/wm-package: la versione è il commit
+ * del submodule, e per una nuova si aggiorna il submodule. La ricerca, lo shortcode [wmwp_map] e ogni altra pagina
  * (dettaglio di track, POI, layer) passano da qui.
  *
  *   window.wmWpMap.mount(element, options) → { update(geojson, { keepView, keepPopup }), destroy() }
@@ -35,7 +35,7 @@ import FullScreen from 'ol/control/FullScreen';
 import Overlay from 'ol/Overlay';
 import TileLayer from 'ol/layer/Tile';
 import XYZ from 'ol/source/XYZ';
-import FeatureCollectionMap from '../vendor/wm-package/src/Nova/Fields/FeatureCollectionMap/resources/js/components/FeatureCollectionMap.vue';
+import FeatureCollectionMap from '../wm-package/src/Nova/Fields/FeatureCollectionMap/resources/js/components/FeatureCollectionMap.vue';
 // Stili di OpenLayers (controlli, attribuzione): in Nova li carica resources/sass/field.scss del campo, che qui non c'è
 import 'ol/ol.css';
 import './map.css';

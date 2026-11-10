@@ -4,12 +4,9 @@
   "description": "Build della mappa di wp-package: il componente FeatureCollectionMap di wm-package (Vue 3 e OpenLayers) in un file solo per WordPress",
   "license": "GPL-2.0-or-later",
   "type": "module",
-  "config": {
-    "wmPackageRef": "f05142f7be6a1d5831b5a8c7b192d2bc43f3a333"
-  },
   "scripts": {
-    "component": "sh scripts/scarica-componente.sh",
-    "build": "npm run component && vite build"
+    "prebuild": "test -f wm-package/src/Nova/Fields/FeatureCollectionMap/resources/js/components/FeatureCollectionMap.vue || (echo 'Manca il submodule wm-package: git submodule update --init map/wm-package' && exit 1)",
+    "build": "vite build"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "5.2.4",
