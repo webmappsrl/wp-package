@@ -4,6 +4,11 @@
  * vale quella di riserva in cache. Si lancia con: wp eval-file tests/php/shards-fallback.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1. Toglie il transient alla fine.
  */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 $calls = 0;
 add_filter(
 	'pre_http_request',

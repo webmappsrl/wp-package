@@ -58,8 +58,9 @@ Fino alla 1.0 può cambiare (vedi sopra). Tutto ciò che non è in questo elenco
 Chiavi della source `tracks`: `endpoint` e `app` (calcolati dalle impostazioni), `link_template` (indirizzo del
 dettaglio con `{id}` e `{ref}`; vuoto = card senza link), `badge_field` (campo dell'etichetta di stato nella riga, es.
 `terms.validation-status`; vuoto = nessuna etichetta; classe `wmwp-badge--<identifier>`), `meta_facet` (`key` del filtro i cui
-valori vanno all'inizio della riga, es. i comuni). Con un testo cercato i percorsi che lo hanno nel nome vengono
-prima (l'API ordina per nome).
+valori vanno all'inizio della riga, es. i comuni), `term_labels` (identifier → nome, per tipo ed etichetta di stato
+nella lingua della pagina: l'API dà i nomi dei termini solo in italiano; senza, il nome dell'API). Con un testo
+cercato i percorsi che lo hanno nel nome vengono prima (l'API ordina per nome).
 
 Selezione e scarico di più percorsi, sempre della source `tracks`: `download_url` (calcolato dalle impostazioni:
 `<origin dello shard>/api/ec/track/multiple`; vuoto = niente caselle né barra), `download_name` (nome di base del
@@ -67,7 +68,9 @@ file, `<download_name>-<numero>.gpx`; con un solo percorso il file prende il nom
 `pedras-rujas-sa-pala-e-sa-trae-sentiero-di-san-francesco-g-602-c.gpx`), `selected` (`['one' => …, 'other' => …]`, «3 percorsi selezionati»),
 `selection_label` (nome della barra per gli screen reader). Ogni riga ha una casella, sopra l'elenco c'è «Seleziona
 tutti i N … della ricerca» (tutta la ricerca, non la pagina) e in fondo una barra con riepilogo, «Deseleziona tutto»,
-formato (GPX, KML, GeoJSON) e pulsante di scarico. Le tracce si chiedono all'API a gruppi di 10, il limite di
+formato (GPX, KML, GeoJSON) e pulsante di scarico. Se il tema rende la barra `fixed` o `sticky`, il plugin tiene
+libero il suo spazio nello scorrimento (`scroll-padding-bottom`) e ne scrive l'altezza nella variabile CSS
+`--wmwp-selection-height` di `<html>` (`0px` senza barra), per spostare gli elementi fissi del tema che coprirebbe. Le tracce si chiedono all'API a gruppi di 10, il limite di
 `multiple`, quattro richieste alla volta, e si convertono nel browser (`assets/js/track-export.js`): le rotte GPX e
 KML dell'API non si usano. La quota resta fuori dal file quando una traccia l'ha a 0 su tutti i punti (DEM non
 calcolato); i percorsi senza tracciato restano fuori e la barra lo dice. La selezione resta cambiando testo, filtri,
@@ -80,11 +83,16 @@ stringhe, `terms` per un elenco di `{identifier, name}`), `field` (percorso nel 
 voce sola, che nell'indirizzo porta l'`id` della fascia). `include` / `include_pattern` tengono solo i valori dell'elenco o
 dell'espressione regolare, `exclude` / `exclude_pattern` li tolgono: con più filtri sullo stesso campo si divide un
 campo misto (es. `taxonomyWheres` in aree, province e comuni). OR dentro un filtro, AND fra filtri; i conteggi di un filtro si
-calcolano senza il filtro stesso.
+calcolano senza il filtro stesso. I filtri valgono nel tab in cui si scelgono: cambiando tab si tolgono (il numero sul
+tab e «Vedi tutti» contano il solo testo, ed è quello che il tab mostra appena aperto); «Indietro» li ritrova.
 
 **`wp_package_search_params`** — nomi dei parametri dell'indirizzo: `['q' => 'q', 'tab' => 'tab',
-'page' => 'page', 'view' => 'view', 'map' => 'map']`; `view` è il nome del parametro della vista e `map` il valore
-della vista mappa («?view=map»; Forestas: «?vista=mappa»).
+'page' => 'pg', 'view' => 'view', 'map' => 'map']`; `view` è il nome del parametro della vista e `map` il valore
+della vista mappa («?view=map»; Forestas: «?vista=mappa»). Un nome vuoto, già usato da un altro parametro o che è una
+query var pubblica di WordPress (`page`, `s`, `p`, `year`… : con `?page=2` su una pagina il redirect canonico toglie
+il parametro e la ricerca torna alla pagina 1) torna al predefinito, con un avviso `_doing_it_wrong`. Lo stesso vale
+per la `key` di un filtro: se è una query var o il nome di un parametro prende il prefisso `f_` (`year` → `f_year`,
+anche in `meta_facet`).
 
 ### JavaScript
 
@@ -110,8 +118,8 @@ fuori).
 Una source mostra i risultati anche su una mappa (selettore «Elenco | Mappa» sopra i risultati, vista nell'indirizzo)
 se registra `map`: `collection( ids, lang, signal, onProgress( done, total ), selected )` →
 `Promise<{ collection, missing }>`, con `collection` la FeatureCollection da disegnare (proprietà lette dalla mappa:
-`strokeColor`, `strokeWidth`, `lineLabel`, `tooltip`, `casing`, `context`, e `url`, aperto al clic) e `selected` gli
-id scelti, e `card( id, lang )` → Card|null, la card che si apre in un riquadro al clic su un elemento della mappa
+`strokeColor`, `strokeWidth`, `lineLabel`, `tooltip`, `casing`, `context`, `id` per il riquadro al clic e `url`,
+l'indirizzo della scheda, che la mappa non apre) e `selected` gli id scelti, e `card( id, lang )` → Card|null, la card che si apre in un riquadro al clic su un elemento della mappa
 (senza `card` il clic non fa niente). La mappa prende il posto di elenco e pagine; «Seleziona tutti» e la barra della
 selezione restano, e la mappa si ridisegna quando la selezione cambia. Il clic sulla mappa non apre il percorso: apre
 il riquadro con la card, che porta alla scheda solo se il percorso ha un indirizzo (`link_template`), e, se la source
@@ -171,10 +179,19 @@ Si usa in tre modi:
   altimetrico al clic su una linea, `false`), `onFeatureClick( properties )`, `onReady( { map, features } )` (`map`
   è la `Map` di OpenLayers), `fullScreen` (pulsante «schermo intero» sotto i +/−, `false`), `popup( properties )` →
   elemento da mostrare in un riquadro sul punto cliccato di una feature con `id` (si chiude con il pulsante, con Esc, con
-  un clic fuori o a ogni `update()`), `labels: { zoomIn, zoomOut, fullScreen, exitFullScreen, closePopup }` (nomi dei
-  pulsanti nella lingua della pagina), `tiles: { url, maxZoom,
-  attributions, viewMaxZoom }` (carta di base al posto di OpenStreetMap). Ricerca e shortcode accendono lo schermo
-  intero.
+  un clic fuori o a ogni `update()`), `labels: { zoomIn, zoomOut, fullScreen, exitFullScreen, closePopup, keyboard }`
+  (nomi dei pulsanti nella lingua della pagina; `keyboard` è il nome della mappa quando prende il focus, con i tasti),
+  `tiles: { url, maxZoom, attributions, viewMaxZoom }` (carta di base al posto di OpenStreetMap). Ricerca e shortcode
+  accendono lo schermo intero.
+- **Accessibilità della mappa** (WCAG 2.1 AA, aggiunta dal wrapper perché il componente non la ha): la mappa prende il
+  focus con Tab (`tabindex="0"`, `role="application"`, attributo `data-wmwp-map-surface`), si sposta con le frecce e
+  si ingrandisce con + e −; la tooltip al passaggio del mouse si chiude con Esc e resta mentre il puntatore ci passa
+  sopra (`data-wmwp-map-tooltip`). Il colore del contorno del focus è la variabile CSS `--wmwp-focus`.
+
+**Requisito per il tema:** la classe `screen-reader-text` (testo per gli screen reader, nascosto alla vista), che i
+temi WordPress definiscono di solito (Impreza in `common/css/base/_general.css`). Il plugin la usa per la `legend` dei
+formati e per il numero dei filtri letto con il nome («, 34 percorsi»): un tema senza la mostrerebbe accanto al
+numero. Il plugin non ha ancora un foglio di stile della ricerca; quando ci sarà (grafica di base), la porterà lui.
 
 **Carta di base.** Ricerca e shortcode usano la prima carta di `MAP.tiles` del `config.json` dell'app configurata
 (`<origin dello shard>/api/app/webmapp/<app id>/config.json`), la stessa che la webapp mostra per prima: per Forestas
@@ -209,8 +226,11 @@ Testi di base in inglese, traduzione italiana in `languages/`. Per rigenerarle c
 
 ## Test
 
-`node --test tests/js/*.test.js` prova la logica pura della ricerca, le tracce da `api/ec/track/multiple` (con un
-fetch finto), le tracce per la mappa e la conversione in GPX, KML e GeoJSON (Node 18 o successivo; con Node 22
-`node --test tests/js/` senza `*.test.js` non trova i file). `wp eval-file tests/php/shards-fallback.php` prova la
-configurazione degli shard con wm-types che non risponde, `wp eval-file tests/php/map-tiles.php` la carta di base
-letta dal `config.json` dell'app (risposte finte).
+`node --test tests/js/*.test.js` prova la logica pura della ricerca, la source `tracks` (in una finestra finta, con
+l'API finta), le tracce da `api/ec/track/multiple` (con un fetch finto), le tracce per la mappa e la conversione in
+GPX, KML e GeoJSON (Node 18 o successivo; con Node 22 `node --test tests/js/` senza `*.test.js` non trova i file).
+Con WP-CLI, dalla cartella di WordPress: `wp eval-file <plugin>/tests/php/shards-fallback.php` prova la
+configurazione degli shard con wm-types che non risponde, `map-tiles.php` la carta di base e i colori dei layer letti
+dal `config.json` dell'app (risposte finte), `search-params.php` i nomi dei parametri e delle chiavi dei filtri che
+non possono essere query var di WordPress. Test e sorgente della mappa restano fuori dall'archivio del repo
+(`.gitattributes`).

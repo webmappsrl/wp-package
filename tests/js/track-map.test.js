@@ -1,4 +1,4 @@
-// Test delle tracce per la mappa dei risultati (oc:8952): node tests/js/track-map.test.js
+// Test delle tracce per la mappa dei risultati (oc:8952): node --test tests/js/*.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const M = require('../../assets/js/track-map.js');

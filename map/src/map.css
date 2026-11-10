@@ -5,6 +5,19 @@
 	display: none;
 }
 
+/* Focus della mappa (si sposta con le frecce): il contorno sta dentro, il contenitore del componente taglia quello che
+   esce. --wmwp-focus lo dà il tema */
+.wmwp-map [data-wmwp-map-surface]:focus-visible {
+	outline: 3px solid var(--wmwp-focus, #005fcc);
+	outline-offset: -3px;
+}
+
+/* Tooltip al passaggio del mouse: il puntatore ci può passare sopra (WCAG 1.4.13; il componente lo ha trasparente agli
+   eventi) */
+.wmwp-map [data-wmwp-map-tooltip] {
+	pointer-events: auto;
+}
+
 /* Fondo della mappa mentre arrivano le tile, come nel campo Nova (resources/sass/field.scss) */
 .wmwp-map .map-container {
 	background: #f3f4f6;

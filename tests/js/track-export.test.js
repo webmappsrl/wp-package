@@ -1,4 +1,4 @@
-// Test dello scarico di più percorsi (oc:8952): node --test tests/js/
+// Test dello scarico di più percorsi (oc:8952): node --test tests/js/*.test.js
 // Le geometrie imitano quelle di `api/ec/track/multiple` sul dev (09/11): MultiLineString con la quota a 0 dove il
 // DEM non è calcolato (343), con la quota vera (250), una LineString e un percorso senza geometria.
 const test = require('node:test');
@@ -11,11 +11,6 @@ const HIGH = feature(250, { type: 'MultiLineString', coordinates: [[[9.5118, 39.
 const LINE = feature(473, { type: 'LineString', coordinates: [[8.2211, 40.9002], [8.2212, 40.9003]] }, 'Z-SS-E-102A');
 const EMPTY = feature(9, null, '');
 const NAMES = { 343: 'Àndala Segura - Sentiero accessibile di Seleni (C 104 A)', 250: 'Fassoni & Su Presoni <C 421>', 473: 'Coscia di Donna' };
-
-test('chunk divide gli id in gruppi della dimensione data, nell\'ordine', () => {
-  assert.deepEqual(E.chunk(['1', '2', '3', '4', '5'], 2), [['1', '2'], ['3', '4'], ['5']]);
-  assert.deepEqual(E.chunk([], 10), []);
-});
 
 test('merge unisce le risposte nell\'ordine degli id, senza doppioni, e conta i percorsi senza tracciato', () => {
   const merged = E.merge(

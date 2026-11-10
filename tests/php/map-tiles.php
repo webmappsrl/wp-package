@@ -6,6 +6,11 @@
  * wp eval-file tests/php/map-tiles.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1. Rimette opzioni e transient com'erano.
  */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 $failures = [];
 $check    = function ( bool $ok, string $what ) use ( &$failures ) {
 	if ( ! $ok ) {

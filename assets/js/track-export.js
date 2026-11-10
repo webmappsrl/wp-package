@@ -23,14 +23,6 @@
     geojson: { mime: 'application/geo+json', extension: 'geojson' }
   };
 
-  function chunk(list, size) {
-    var out = [];
-    for (var i = 0; i < list.length; i += size) {
-      out.push(list.slice(i, i + size));
-    }
-    return out;
-  }
-
   // Linee di una geometria (LineString o MultiLineString); le altre non sono percorsi
   function lines(geometry) {
     if (!geometry || !Array.isArray(geometry.coordinates)) {
@@ -174,7 +166,6 @@
 
   return {
     FORMATS: FORMATS,
-    chunk: chunk,
     merge: merge,
     toGpx: toGpx,
     toKml: toKml,

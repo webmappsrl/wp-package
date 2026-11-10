@@ -97,7 +97,21 @@
   }
 
   // Primo termine di un campo come etichetta: { key: identifier, label: nome nella lingua, o in italiano }.
-  function firstTerm(hit, path, lang) {
+  // Nome di un termine dello shard: quello del tema per l'identifier (labels, es. `term_labels` della source), poi
+  // quello dell'API nella lingua, poi l'identifier. L'API del dev dà i nomi di terms.route-type e
+  // terms.validation-status solo in italiano (10/11): senza il tema, sulla pagina inglese restano in italiano
+  function termName(term, lang, labels) {
+    if (!term) {
+      return '';
+    }
+    var id = term.identifier ? String(term.identifier) : '';
+    if (id && labels && labels[id]) {
+      return String(labels[id]).trim();
+    }
+    return String(localized(term.name, lang) || id).trim();
+  }
+
+  function firstTerm(hit, path, lang, labels) {
     if (!path) {
       return null;
     }
@@ -106,7 +120,7 @@
     if (!term || !term.identifier) {
       return null;
     }
-    return { key: String(term.identifier), label: String(localized(term.name, lang) || term.identifier).trim() };
+    return { key: String(term.identifier), label: termName(term, lang, labels) };
   }
 
   // include / include_pattern tengono solo certi valori, exclude / exclude_pattern ne tolgono: servono, per
@@ -332,6 +346,8 @@
     cleanQuery: cleanQuery,
     facetValues: facetValues,
     firstTerm: firstTerm,
+    termName: termName,
+    localized: localized,
     rankByText: rankByText,
     filterHits: filterHits,
     computeFacets: computeFacets,

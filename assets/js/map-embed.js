@@ -33,7 +33,8 @@
       zoomIn: __('Zoom in on the map', 'wp-package'),
       zoomOut: __('Zoom out of the map', 'wp-package'),
       fullScreen: __('Show the map full screen', 'wp-package'),
-      exitFullScreen: __('Exit full screen', 'wp-package')
+      exitFullScreen: __('Exit full screen', 'wp-package'),
+      keyboard: __('Map: arrow keys to move it, + and − to zoom in and out', 'wp-package')
     };
     if (options.tracks && options.tracks.length && options.download_url && window.wmWpTrackApi && window.wmWpTrackMap) {
       window.wmWpTrackApi.create(options.download_url).features(options.tracks).then(function (result) {

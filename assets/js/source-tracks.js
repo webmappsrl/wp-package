@@ -23,9 +23,13 @@
   }
   var i18n = (window.wp && window.wp.i18n) || {};
   var __ = i18n.__ || function (text) { return text; };
-  var sprintf = function (format, value) { return i18n.sprintf ? i18n.sprintf(format, value) : format.replace('%s', value); };
+  // wp.i18n c'è sempre (dipendenza di wmwp-search); il ripiego tratta %s e %1$s come l'unico valore
+  var sprintf = function (format, value) { return i18n.sprintf ? i18n.sprintf(format, value) : format.replace(/%(1\$)?s/, value); };
 
+  // Risposte per testo, al massimo RESPONSE_LIMIT (una risposta con tutti i percorsi pesa circa 2,5 MB): con un testo
+  // nuovo si toglie quello usato meno di recente
   var responses = new Map();
+  var RESPONSE_LIMIT = 6;
   // Ogni percorso visto in una risposta, per id: nome, lunghezza e dislivello dei percorsi scelti anche quando la
   // ricerca è cambiata
   var known = new Map();
@@ -34,6 +38,8 @@
   function hitsFor(text, signal) {
     var cached = responses.get(text);
     if (cached && (cached.done || !cached.signal.aborted)) {
+      responses.delete(text);
+      responses.set(text, cached);
       return cached.promise;
     }
     if (!source.endpoint || !source.app) {
@@ -58,6 +64,9 @@
       });
     var entry = { promise: promise, signal: signal, done: false };
     responses.set(text, entry);
+    while (responses.size > RESPONSE_LIMIT) {
+      responses.delete(responses.keys().next().value);
+    }
     promise.then(
       function () { entry.done = true; },
       function () {
@@ -69,9 +78,8 @@
     return promise;
   }
 
-  function localized(names, lang) {
-    return (names && (names[lang] || names.it)) || '';
-  }
+  // Nome nella lingua della pagina, con l'italiano di ripiego (search-logic)
+  var localized = L.localized;
 
   function trackUrl(hit) {
     if (!source.link_template) {
@@ -79,7 +87,7 @@
     }
     return source.link_template
       .replace('{id}', encodeURIComponent(hit.id))
-      .replace('{ref}', encodeURIComponent(hit.ref || ''));
+      .replace('{ref}', encodeURIComponent(hit.ref ? String(hit.ref).trim() : ''));
   }
 
   // Filtro i cui valori vanno all'inizio della riga (es. i comuni), indicato dal tema con meta_facet
@@ -93,7 +101,8 @@
       title: String(localized(hit.name, lang)).trim(),
       url: trackUrl(hit),
       typeKey: routeType ? String(routeType.identifier) : '',
-      typeLabel: routeType ? String(localized(routeType.name, lang)).trim() : '',
+      // Nomi di tipo e stato dal tema (term_labels) quando ci sono: l'API li dà solo in italiano
+      typeLabel: L.termName(routeType, lang, source.term_labels),
       image: hit.feature_image ? { src: hit.feature_image, alt: '' } : null,
       code: hit.ref ? String(hit.ref).trim() : null,
       meta: [
@@ -103,7 +112,7 @@
         L.formatDuration(hit.duration_forward, lang)
       ],
       // Stato del percorso (es. terms.validation-status), se il tema indica il campo con badge_field
-      badge: L.firstTerm(hit, source.badge_field, lang)
+      badge: L.firstTerm(hit, source.badge_field, lang, source.term_labels)
     };
   }
 

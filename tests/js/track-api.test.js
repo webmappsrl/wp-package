@@ -1,4 +1,4 @@
-// Test delle tracce da `api/ec/track/multiple` (oc:8952): node tests/js/track-api.test.js
+// Test delle tracce da `api/ec/track/multiple` (oc:8952): node --test tests/js/*.test.js
 // L'API vera tiene solo i primi 10 id (EcTrackController del wm-package, array_slice($ids, 0, 10)): il finto fetch fa lo
 // stesso, così un gruppo più grande perderebbe tracce e il test se ne accorge.
 const test = require('node:test');
@@ -25,7 +25,7 @@ function fakeApi(options = {}) {
         reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
         return;
       }
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         inFlight--;
         if (options.status) {
           resolve({ ok: false, status: options.status });
@@ -40,6 +40,14 @@ function fakeApi(options = {}) {
           }));
         resolve({ ok: true, json: () => Promise.resolve({ type: 'FeatureCollection', features }) });
       }, 5);
+      // Come il fetch vero: un annullamento a richiesta partita la rifiuta subito
+      if (init && init.signal) {
+        init.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          inFlight--;
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        });
+      }
     });
   };
   return { fetch, calls, maxInFlight: () => maxInFlight };
@@ -114,4 +122,27 @@ test('onProgress arriva dopo ogni gruppo con le tracce di quel gruppo già in ca
   const seen = [];
   await api.features(wanted, null, (done) => seen.push([done, api.cached(wanted).length]));
   assert.ok(seen.every(([done, cached]) => done === cached));
+});
+
+test('due chiamate insieme sulle stesse tracce (mappa e scarico) fanno una richiesta sola', async () => {
+  const fake = fakeApi();
+  const api = A.create(URL_API, { fetch: fake.fetch });
+  const [map, download] = await Promise.all([api.features(ids(15)), api.features(ids(5, 11))]);
+  assert.equal(fake.calls.length, 2);
+  assert.deepEqual(fake.calls.flat().sort((a, b) => a - b), ids(15));
+  assert.equal(map.features.length, 15);
+  assert.deepEqual(download.features.map((f) => String(f.properties.id)), ids(5, 11));
+});
+
+test('se la chiamata che aveva fatto la richiesta viene annullata, l\'altra rifà la richiesta e ha le tracce', async () => {
+  const fake = fakeApi();
+  const api = A.create(URL_API, { fetch: fake.fetch });
+  const controller = new AbortController();
+  const first = api.features(ids(3), controller.signal);
+  const second = api.features(ids(3));
+  controller.abort();
+  await assert.rejects(first, { name: 'AbortError' });
+  const result = await second;
+  assert.deepEqual(result.features.map((f) => String(f.properties.id)), ids(3));
+  assert.equal(fake.calls.length, 2);
 });

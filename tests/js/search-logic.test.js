@@ -1,4 +1,4 @@
-// Test della logica pura della ricerca (oc:8952): node --test tests/js/
+// Test della logica pura della ricerca (oc:8952): node --test tests/js/*.test.js
 // La fixture sono 5 percorsi veri dell'API Elasticsearch del dev (09/11), ridotti ai campi usati; al 529
 // è stato tolto `terms` per provare un percorso senza quel campo.
 const test = require('node:test');
@@ -195,6 +195,17 @@ test('computeFacets conta le fasce e filterHits filtra per fascia', () => {
   const view = L.computeFacets(STATUS_HITS, [VALIDATION], {}, 'it')[0];
   assert.deepEqual(view.values.map((v) => v.id + '=' + v.count), ['avanzato=1', 'intermedio=2', 'base=1']);
   assert.deepEqual(L.filterHits(STATUS_HITS, [VALIDATION], { validazione: ['intermedio'] }, 'it').map((h) => h.id), [2, 3]);
+});
+
+test('firstTerm e termName usano il nome del tema (term_labels) prima di quello dell\'API, che è solo in italiano', () => {
+  // L'API del dev dà terms.validation-status e terms.route-type con il nome solo in "it" (10/11)
+  const labels = { 'validation-status-validated': 'Validated', 'route-type-trail': 'Trail' };
+  assert.deepEqual(L.firstTerm(STATUS_HITS[0], 'terms.validation-status', 'en', labels), { key: 'validation-status-validated', label: 'Validated' });
+  assert.equal(L.termName({ identifier: 'route-type-trail', name: { it: 'Sentiero' } }, 'en', labels), 'Trail');
+  // senza un nome del tema resta quello dell'API, e senza nome l'identifier
+  assert.equal(L.termName({ identifier: 'route-type-walk', name: { it: ' Cammino ' } }, 'en', labels), 'Cammino');
+  assert.equal(L.termName({ identifier: 'route-type-x' }, 'en', {}), 'route-type-x');
+  assert.equal(L.termName(null, 'en', labels), '');
 });
 
 test('firstTerm dà il primo termine di un campo come etichetta, o null', () => {

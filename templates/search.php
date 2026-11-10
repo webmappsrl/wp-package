@@ -23,8 +23,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<div class="wmwp-search__facets" data-wmwp="facets"></div>
 			</div>
 			<div class="wmwp-search__main">
-				<form class="wmwp-search__form" role="search" method="get" action="" data-wmwp="form">
-					<label class="wmwp-search__label" for="wmwp-q" data-wmwp="search-label"><?php echo esc_html__( 'Search the site', 'wp-package' ); ?></label>
+				<?php
+				// aria-labelledby: la pagina ha anche il campo di ricerca dell'header, e due landmark «search» vanno
+				// distinti dal nome (WAI-ARIA, «landmark regions»)
+				?>
+				<form class="wmwp-search__form" role="search" method="get" action="" aria-labelledby="wmwp-search-label" data-wmwp="form">
+					<label class="wmwp-search__label" id="wmwp-search-label" for="wmwp-q" data-wmwp="search-label"><?php echo esc_html__( 'Search the site', 'wp-package' ); ?></label>
 					<div class="wmwp-search__field">
 						<input class="wmwp-search__input" type="search" id="wmwp-q" name="<?php echo esc_attr( $wmwp['params']['q'] ); ?>" data-wmwp="input" autocomplete="off">
 						<button class="wmwp-search__submit" type="submit"><?php echo esc_html__( 'Search', 'wp-package' ); ?></button>

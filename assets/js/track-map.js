@@ -2,7 +2,8 @@
  * Tracce per la mappa dei risultati (oc:8952): dalle feature di wmWpTrackApi alla FeatureCollection che la mappa
  * (assets/dist/wp-package-map.js, il componente FeatureCollectionMap di wm-package) disegna. Le proprietà sono quelle
  * che il componente legge: `strokeColor` e `strokeWidth` per la linea, `lineLabel` per l'etichetta lungo la linea,
- * `tooltip` al passaggio del mouse; `url` serve a chi apre il percorso al clic. Nel browser è `window.wmWpTrackMap`.
+ * `tooltip` al passaggio del mouse; `id` per il riquadro al clic (popup della mappa) e `url`, l'indirizzo della scheda,
+ * su cui la mappa mette il puntatore a mano senza aprirlo. Nel browser è `window.wmWpTrackMap`.
  *
  *   wmWpTrackMap.collection(features, info, style, selected) → FeatureCollection
  *   info:  id → { name, code, url } (dai risultati della ricerca); style: { color, width, layerColors }

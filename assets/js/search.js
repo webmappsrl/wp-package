@@ -28,7 +28,7 @@
 (function () {
   'use strict';
 
-  var config = window.wmWpSearchConfig || { params: { q: 'q', tab: 'tab', page: 'page' }, sources: [], lang: 'en' };
+  var config = window.wmWpSearchConfig || { params: { q: 'q', tab: 'tab', page: 'pg', view: 'view', map: 'map' }, sources: [], lang: 'en' };
   var L = window.wmWpSearchLogic;
   var i18n = (window.wp && window.wp.i18n) || {};
   var __ = i18n.__ || function (text) { return text; };
@@ -38,6 +38,7 @@
   };
   var DEBOUNCE_MS = 400;
   var SOFT_LIMIT = 5;
+  var OVERVIEW_LIMIT = 40;
   // Tempo massimo di una source, poi va in errore: un'API lenta non tiene la pagina in attesa per sempre
   var TIMEOUT_MS = config.timeout_ms || 15000;
 
@@ -72,6 +73,7 @@
   var focusTab = false;
   var expandedFacets = {};
   var lastStatus = '';
+  var statusTail = null;
   var defaultLabel = '';
   var filtersLabel = '';
   // Posizione dell'etichetta appena tolta: dopo il ridisegno il focus va sull'etichetta che ha preso il suo posto
@@ -144,7 +146,7 @@
 
   function selectable(source) {
     var impl = source && impls[source.id];
-    return !!(impl && impl.selection && typeof impl.selection.download === 'function');
+    return !!(impl && impl.selection && typeof impl.selection.download === 'function' && typeof impl.selection.summary === 'function');
   }
 
   function selectedFor(source) {
@@ -226,6 +228,10 @@
     );
     var entry = { promise: promise, signal: signal, done: false };
     overviews.set(key, entry);
+    // Al massimo OVERVIEW_LIMIT ricerche in memoria: si tolgono le più vecchie
+    while (overviews.size > OVERVIEW_LIMIT) {
+      overviews.delete(overviews.keys().next().value);
+    }
     promise.then(
       function (group) {
         if (group.error) {
@@ -313,8 +319,17 @@
 
   // Il numero iniziale in grassetto, come il totale della tavola 2 («<b>28</b> sentieri · 179,5 km complessivi»); il
   // testo letto dagli screen reader resta la frase intera
+  // Con la stessa frase di prima (un filtro che non cambia il totale) uno screen reader non riannuncia niente: si
+  // aggiunge o si toglie un carattere invisibile in fondo, così la zona role="status" cambia e la frase si rilegge
   function setStatus(text) {
     if (text === lastStatus) {
+      // Un nodo solo in coda, che alterna vuoto e carattere invisibile: il testo cambia e lo screen reader lo rilegge
+      if (text) {
+        if (!statusTail || statusTail.parentNode !== dom.status) {
+          statusTail = dom.status.appendChild(document.createTextNode(''));
+        }
+        statusTail.nodeValue = statusTail.nodeValue ? '' : '\u200b';
+      }
       return;
     }
     lastStatus = text;
@@ -510,12 +525,26 @@
 
   // Barra in fondo: riepilogo, «Deseleziona tutto», formato e «Scarica N percorsi in GPX». Solo nel tab di una source
   // che permette la selezione e con almeno un risultato scelto.
+  // Con la barra della selezione fissa in fondo (dal tema), lo scorrimento tiene libero il suo spazio: il campo che
+  // prende il focus con Tab non finisce sotto la barra (WCAG 2.4.11, tecnica C43: scroll-padding). L'altezza della
+  // barra resta nella variabile CSS --wmwp-selection-height di <html> (0px senza barra), per gli elementi fissi del
+  // tema che la barra coprirebbe (es. il pulsante «torna su»)
+  function syncSelectionSpace() {
+    var root = document.documentElement;
+    var fixed = !dom.selection.hidden && /fixed|sticky/.test(window.getComputedStyle(dom.selection).position);
+    var height = fixed ? Math.ceil(dom.selection.getBoundingClientRect().height) : 0;
+    // 12px: il `bottom` della barra nel tema; 16px: il contorno del focus (3px, 2px fuori dall'elemento) e un po' d'aria
+    root.style.scrollPaddingBottom = fixed ? (height + 12 + 16) + 'px' : '';
+    root.style.setProperty('--wmwp-selection-height', height + 'px');
+  }
+
   function renderSelection() {
     var source = selectionSource;
     var ids = selectedFor(source);
     dom.selection.hidden = !ids.length;
     dom.root.classList.toggle('has-selection', ids.length > 0);
     if (!ids.length) {
+      syncSelectionSpace();
       return;
     }
     if (source.selection_label) {
@@ -532,6 +561,7 @@
     }
     /* translators: 1: number and type of results (e.g. 3 trails), 2: file format (e.g. GPX) */
     dom.selectionDownload.textContent = sprintf(__('Download %1$s as %2$s', 'wp-package'), countText(source, ids.length), FORMAT_LABELS[currentFormat()]);
+    syncSelectionSpace();
   }
 
   function setSelectionStatus(text) {
@@ -597,6 +627,9 @@
   function clearSelection() {
     if (!selectionSource) {
       return;
+    }
+    if (downloading) {
+      downloading.abort();
     }
     selected[selectionSource.id] = [];
     setSelectionStatus('');
@@ -695,6 +728,9 @@
     if (!shown) {
       dom.results.appendChild(message(noResultsText(), false));
       setStatus(noResultsText());
+    } else if (!parts.length) {
+      // Solo source in errore e le altre senza risultati: il gruppo in errore lo dice, la riga di stato pure
+      setStatus(__('These results are not available right now. Please try again later.', 'wp-package'));
     } else {
       setStatus(parts.join(' · '));
     }
@@ -841,7 +877,8 @@
             zoomOut: __('Zoom out of the map', 'wp-package'),
             fullScreen: __('Show the map full screen', 'wp-package'),
             exitFullScreen: __('Exit full screen', 'wp-package'),
-            closePopup: __('Close', 'wp-package')
+            closePopup: __('Close', 'wp-package'),
+            keyboard: __('Map: arrow keys to move it, + and − to zoom in and out', 'wp-package')
           }
         });
       }
@@ -931,6 +968,8 @@
       hideMap();
       dom.results.appendChild(message(__('These results are not available right now. Please try again later.', 'wp-package'), false));
       dom.facets.textContent = '';
+      // senza filtri da mostrare, niente chip né «Filtri (2)» davanti a una colonna vuota
+      renderActive(null, []);
       setStatus(__('These results are not available right now. Please try again later.', 'wp-package'));
       return;
     }
@@ -1015,12 +1054,18 @@
         var name = document.createElement('span');
         name.className = 'wmwp-facet__label';
         name.textContent = value.label;
+        // Il numero si vede da solo; lo screen reader legge «Sentiero, 34 percorsi» invece di «Sentiero34»
         var count = document.createElement('span');
         count.className = 'wmwp-facet__count';
+        count.setAttribute('aria-hidden', 'true');
         count.textContent = formatNumber(value.count);
+        var spoken = document.createElement('span');
+        spoken.className = 'screen-reader-text';
+        spoken.textContent = ', ' + countText(source, value.count);
         label.appendChild(input);
         label.appendChild(name);
         label.appendChild(count);
+        label.appendChild(spoken);
         li.appendChild(label);
         ul.appendChild(li);
       });
@@ -1179,10 +1224,14 @@
     dom.results.scrollIntoView({ block: 'start' });
   }
 
+  // Cambiando tab i filtri si tolgono: valgono per la source del tab in cui si sono scelti («Validazione» c'è solo per
+  // i percorsi), e così «Vedi tutti: 37 percorsi» apre davvero 37 percorsi. «Indietro» ritrova la ricerca filtrata
+  // (Rubens, 10/11, review interna di wp-package, punto 13a)
   function goToTab(slug) {
     typingEntry = false;
     state.tab = slug;
     state.page = 1;
+    state.filters = {};
     writeUrl(true);
     focusTab = true;
     run();
@@ -1222,9 +1271,10 @@
     dom.input.focus();
   }
 
-  // Testo cercato. Una ricerca nuova è un passo della cronologia: la prima pausa mentre si scrive crea il passo
-  // (pushState), le pause successive e l'Invio lo aggiornano (replaceState). Così «Indietro» torna alla ricerca
-  // precedente, non a ogni parola scritta a metà.
+  // Testo cercato. Quello che si scrive di seguito è un passo della cronologia: la prima pausa crea il passo
+  // (pushState), le pause successive e l'Invio lo aggiornano (replaceState); dopo l'Invio, o un cambio di filtro, tab,
+  // pagina o vista, il testo successivo ne crea un altro. Così «Indietro» torna alla ricerca precedente, non a ogni
+  // parola scritta a metà.
   function setText(text, done) {
     if (text !== state.text) {
       state.text = text;
@@ -1363,7 +1413,15 @@
         }
       }
     });
+    // L'altezza della barra cambia con la larghezza (su un telefono va su più righe) e con l'avanzamento dello scarico
+    window.addEventListener('resize', syncSelectionSpace);
+    if (window.ResizeObserver) {
+      new window.ResizeObserver(syncSelectionSpace).observe(dom.selection);
+    }
     window.addEventListener('popstate', function () {
+      // La voce ripristinata non è quella che si sta scrivendo: il prossimo testo apre una voce nuova
+      clearTimeout(typingTimer);
+      typingEntry = false;
       readUrl();
       run();
     });
