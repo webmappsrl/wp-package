@@ -108,7 +108,9 @@ function wmwp_app_map_config(): array {
 	if ( is_array( $cached ) && isset( $cached['tiles'], $cached['layer_colors'] ) ) {
 		return $cached;
 	}
-	$response = wp_remote_get( $url, [ 'timeout' => 5 ] );
+	// Lo legge il server: all'indirizzo con cui WordPress raggiunge lo shard (wmwp_server_origin), che può non essere
+	// quello del browser
+	$response = wp_remote_get( wmwp_server_url( $url ), [ 'timeout' => 5 ] );
 	$config   = ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) )
 		? json_decode( wp_remote_retrieve_body( $response ), true )
 		: null;

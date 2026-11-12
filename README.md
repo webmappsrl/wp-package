@@ -94,9 +94,11 @@ il parametro e la ricerca torna alla pagina 1) torna al predefinito, con un avvi
 per la `key` di un filtro: se è una query var o il nome di un parametro prende il prefisso `f_` (`year` → `f_year`,
 anche in `meta_facet`).
 
-**`wmwp_api_urls`** — `[ 'elastic_api' => …, 'origin' => … ]` dello shard configurato: per uno shard che non sta in
-`environment.ts` (es. in locale). **`wmwp_server_origin`** — origin dello shard per le richieste del server WordPress,
-se diverso da quello del browser (es. WordPress in Docker: `http://host.docker.internal:8000`).
+**`wmwp_api_urls`** — `[ 'elastic_api' => …, 'origin' => …, 'aws_api' => … ]` dello shard configurato: per uno
+shard che non sta in `environment.ts` (es. in locale). **`wmwp_server_origin`** — origin dello shard per le richieste
+del server WordPress, se diverso da quello del browser (es. WordPress in Docker: `http://host.docker.internal:8000`).
+Vale per tutte le richieste del server allo shard (config.json dell'app per carta e colori, indice e dettagli), che
+passano da `wmwp_server_url()`.
 
 **`wmwp_detail_items`** — elementi dell'indice dei dettagli (`type`, `id`, `names`, `kind`, `source`) prima della
 costruzione. **`wmwp_detail_meta`** — meta del dettaglio (`title`, `description`, `image`, `url`, `locale`).

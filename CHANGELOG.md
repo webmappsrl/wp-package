@@ -12,7 +12,8 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le ve
   Impreza, Yoast, Rank Math), `hreflang` e selettore di lingua con WPML, sitemap del core (oc:8969).
 - Indirizzo per id `?wmwp_detail=&wmwp_id=` come `link_template` predefinito della ricerca (oc:8969).
 - Filtri `wmwp_api_urls` e `wmwp_server_origin` per uno shard fuori da `environment.ts` o raggiunto dal server da un
-  altro indirizzo (oc:8969).
+  altro indirizzo (oc:8969). Anche il config.json dell'app (carta Webmapp e colori dei layer) si legge all'indirizzo del
+  server: con WordPress in Docker e lo shard sull'host la mappa restava su OpenStreetMap.
 
 ## 0.1.0 — non rilasciata
 

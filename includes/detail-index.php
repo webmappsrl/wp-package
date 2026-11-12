@@ -136,24 +136,12 @@ const WMWP_DETAIL_REBUILT_AT = 'wmwp_detail_index_rebuilt_at';
 const WMWP_DETAIL_REBUILD_INTERVAL = 300;
 
 /**
- * Un URL dello shard come lo raggiunge il server WordPress: l'origin del browser sostituito da wmwp_server_origin().
- */
-function wmwp_detail_server_url( string $url ): string {
-	$origin = wmwp_configured_api_urls()['origin'];
-	$server = wmwp_server_origin();
-	if ( '' !== $origin && $server !== $origin && 0 === strpos( $url, $origin ) ) {
-		return $server . substr( $url, strlen( $origin ) );
-	}
-	return $url;
-}
-
-/**
  * JSON di una risposta dello shard, anche quando è una stringa JSON dentro un JSON (pois.geojson sul dev), o null.
  *
  * @return array<mixed>|null
  */
 function wmwp_detail_get_json( string $url, int $timeout ) {
-	$response = wp_remote_get( wmwp_detail_server_url( $url ), [ 'timeout' => $timeout ] );
+	$response = wp_remote_get( wmwp_server_url( $url ), [ 'timeout' => $timeout ] );
 	if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
 		return null;
 	}

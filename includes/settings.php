@@ -119,6 +119,18 @@ function wmwp_server_origin(): string {
 	return untrailingslashit( (string) apply_filters( 'wmwp_server_origin', wmwp_configured_api_urls()['origin'] ) );
 }
 
+/**
+ * Un URL dello shard come lo raggiunge il server WordPress: l'origin del browser sostituito da wmwp_server_origin().
+ */
+function wmwp_server_url( string $url ): string {
+	$origin = wmwp_configured_api_urls()['origin'];
+	$server = wmwp_server_origin();
+	if ( '' !== $origin && $server !== $origin && 0 === strpos( $url, $origin ) ) {
+		return $server . substr( $url, strlen( $origin ) );
+	}
+	return $url;
+}
+
 /** URL dell'API Elasticsearch dello shard configurato, '' se shard o app id mancano. */
 function wmwp_elastic_url(): string {
 	return wmwp_configured_api_urls()['elastic_api'];

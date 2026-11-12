@@ -66,15 +66,26 @@ $saved_shard = get_option( WMWP_OPTION_SHARD );
 $saved_app   = get_option( WMWP_OPTION_APP_ID );
 update_option( WMWP_OPTION_SHARD, 'forestasdev' );
 update_option( WMWP_OPTION_APP_ID, 1 );
-$calls  = 0;
-$answer = 'ok';
+// Il browser e il server WordPress raggiungono lo shard da due indirizzi (es. WordPress in Docker): il config.json lo
+// legge il server, quindi va chiesto all'indirizzo di wmwp_server_origin
+$browser_urls  = function ( $urls ) {
+	$urls['origin'] = 'http://browser.test';
+	return $urls;
+};
+$server_origin = fn() => 'http://server.test';
+add_filter( 'wmwp_api_urls', $browser_urls, 99 );
+add_filter( 'wmwp_server_origin', $server_origin, 99 );
+$calls    = 0;
+$answer   = 'ok';
+$last_url = '';
 add_filter(
 	'pre_http_request',
-	function ( $pre, $args, $url ) use ( &$calls, &$answer ) {
+	function ( $pre, $args, $url ) use ( &$calls, &$answer, &$last_url ) {
 		if ( false === strpos( $url, '/api/app/webmapp/1/config.json' ) ) {
 			return $pre;
 		}
 		++$calls;
+		$last_url = $url;
 		if ( 'down' === $answer ) {
 			return new WP_Error( 'wmwp_test_down', 'shard non risponde (test)' );
 		}
@@ -102,6 +113,7 @@ $first  = wmwp_map_tiles();
 $second = wmwp_map_tiles();
 $layers = wmwp_map_layer_colors();
 $check( 1 === $calls, "una richiesta sola al config.json per carta e colori, invece di {$calls}" );
+$check( 'http://server.test/api/app/webmapp/1/config.json' === $last_url, "config.json chiesto all'indirizzo del server, non a {$last_url}" );
 $check( [ [ 'id' => 11, 'color' => '#de1b0d' ] ] === $layers, 'colori dei layer letti dallo shard' );
 $check( 'https://api.webmapp.it/tiles/{z}/{x}/{y}.png' === ( $first['url'] ?? '' ) && $first === $second, 'carta letta dallo shard e poi dalla cache' );
 
@@ -116,6 +128,8 @@ add_filter( 'wp_package_map_layer_colors', fn() => [ [ 'id' => 1, 'color' => '#0
 $check( [ [ 'id' => 1, 'color' => '#000000' ] ] === wmwp_map_layer_colors(), 'il tema cambia i colori con wp_package_map_layer_colors' );
 
 delete_transient( $key );
+remove_filter( 'wmwp_api_urls', $browser_urls, 99 );
+remove_filter( 'wmwp_server_origin', $server_origin, 99 );
 update_option( WMWP_OPTION_SHARD, $saved_shard );
 update_option( WMWP_OPTION_APP_ID, $saved_app );
 
