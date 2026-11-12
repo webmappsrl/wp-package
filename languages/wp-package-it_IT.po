@@ -354,3 +354,39 @@ msgstr "Togli il filtro %1$s: %2$s"
 #: assets/js/source-tracks.js:222
 msgid "%s in total"
 msgstr "%s complessivi"
+
+#: includes (oc:8969)
+msgid "Detail pages"
+msgstr "Pagine di dettaglio"
+
+#: includes (oc:8969)
+msgid "By default the address of a detail page starts with its type: the route type of a track (e.g. /trail/…, /track/ without one) and the POI type of a point of interest (/poi/ without one). Under a page, every address starts with the path of that page."
+msgstr "Di norma l'indirizzo di una pagina di dettaglio inizia con il suo tipo: il tipo di percorso di una traccia (es. /sentiero/…, /track/ se non ce l'ha) e il tipo di un punto di interesse (/poi/ se non ce l'ha). Sotto una pagina, ogni indirizzo inizia con il percorso di quella pagina."
+
+#: includes (oc:8969)
+msgid "Points of interest"
+msgstr "Punti di interesse"
+
+#: includes (oc:8969)
+msgid "Address under a page"
+msgstr "Indirizzo sotto una pagina"
+
+#: includes (oc:8969)
+msgid "Page"
+msgstr "Pagina"
+
+#: includes (oc:8969)
+msgid "Set by the theme: changes here have no effect."
+msgstr "Impostato dal tema: le modifiche qui non hanno effetto."
+
+#: includes (oc:8969)
+msgid "Page temporarily unavailable"
+msgstr "Pagina momentaneamente non disponibile"
+
+#: includes (oc:8969)
+msgid "The data of this page cannot be loaded right now. Please try again in a few minutes."
+msgstr "In questo momento non è possibile caricare i dati di questa pagina. Riprova tra qualche minuto."
+
+#. Description of the plugin
+msgid "Unified site search and detail pages for Webmapp shards: tracks and POIs from the shard APIs, sources added by the theme."
+msgstr "Ricerca unica del sito e pagine di dettaglio per gli shard Webmapp: tracce e POI dalle API dello shard, source aggiunte dal tema."

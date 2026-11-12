@@ -3,6 +3,17 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.2.0 — non rilasciata
+
+### Aggiunto
+- Pagine di dettaglio di tracce e POI senza post: indirizzi `/<base>/<slug>/` per lingua con base dal tipo o da una
+  pagina scelta nelle impostazioni, indice dalle API dello shard, JSON della traccia dal file su AWS con richiesta condizionale (ETag/Last-Modified) e del POI dallo shard, cache breve di 60 s (`wmwp_detail_cache_ttl`), 301/404/503, template
+  `track.php`, `poi.php`, `detail-unavailable.php` sostituibili dal tema, SEO con il solo core (adattatori per
+  Impreza, Yoast, Rank Math), `hreflang` e selettore di lingua con WPML, sitemap del core (oc:8969).
+- Indirizzo per id `?wmwp_detail=&wmwp_id=` come `link_template` predefinito della ricerca (oc:8969).
+- Filtri `wmwp_api_urls` e `wmwp_server_origin` per uno shard fuori da `environment.ts` o raggiunto dal server da un
+  altro indirizzo (oc:8969).
+
 ## 0.1.0 — non rilasciata
 
 ### Aggiunto

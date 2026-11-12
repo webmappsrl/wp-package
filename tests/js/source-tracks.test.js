@@ -97,6 +97,12 @@ test('tipo e stato prendono il nome dal tema (term_labels), se no il nome italia
   assert.equal(it.items.find((item) => item.id === 473).typeLabel, 'Sentiero');
 });
 
+test('l\'indirizzo per id del dettaglio (link_template predefinito, oc:8969) porta l\'id nella query', async () => {
+  const { impl } = load({ source: { link_template: 'http://x/?wmwp_detail=track&wmwp_id={id}' } });
+  const result = await impl.search(query());
+  assert.equal(result.items.find((item) => item.id === 473).url, 'http://x/?wmwp_detail=track&wmwp_id=473');
+});
+
 test('senza link_template la card non ha indirizzo', async () => {
   const { impl } = load({ source: { link_template: '' } });
   const result = await impl.search(query());

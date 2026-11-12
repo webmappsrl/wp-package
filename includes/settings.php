@@ -85,17 +85,38 @@ function wmwp_get_api_urls( string $shard, int $app_id ): array {
 		return [
 			'elastic_api' => '',
 			'origin'      => '',
+			'aws_api'     => '',
 		];
 	}
 	return [
 		'elastic_api' => untrailingslashit( $shards[ $shard ]['elasticApi'] ),
 		'origin'      => untrailingslashit( $shards[ $shard ]['origin'] ),
+		'aws_api'     => untrailingslashit( $shards[ $shard ]['awsApi'] ),
 	];
 }
 
-/** URL delle API dello shard configurato. */
+/**
+ * URL delle API dello shard configurato. Il filtro `wmwp_api_urls` li cambia (es. uno shard in locale che non sta in
+ * `environment.ts`): riceve e restituisce `[ 'elastic_api' => …, 'origin' => …, 'aws_api' => … ]`. `aws_api` (l'`awsApi` di
+ * `environment.ts`, dove lo shard pubblica i file delle tracce) lo legge solo il server, per il dettaglio della traccia.
+ */
 function wmwp_configured_api_urls(): array {
-	return wmwp_get_api_urls( (string) get_option( WMWP_OPTION_SHARD, '' ), (int) get_option( WMWP_OPTION_APP_ID, 0 ) );
+	$urls = wmwp_get_api_urls( (string) get_option( WMWP_OPTION_SHARD, '' ), (int) get_option( WMWP_OPTION_APP_ID, 0 ) );
+	$urls = apply_filters( 'wmwp_api_urls', $urls );
+	return [
+		'elastic_api' => untrailingslashit( (string) ( $urls['elastic_api'] ?? '' ) ),
+		'origin'      => untrailingslashit( (string) ( $urls['origin'] ?? '' ) ),
+		'aws_api'     => untrailingslashit( (string) ( $urls['aws_api'] ?? '' ) ),
+	];
+}
+
+/**
+ * Origin dello shard per le richieste fatte dal server WordPress (oc:8969). Di solito è lo stesso del browser; il
+ * filtro `wmwp_server_origin` serve quando il server lo raggiunge da un altro indirizzo (es. WordPress in Docker e
+ * shard sull'host: `http://host.docker.internal:8000` invece di `http://localhost:8000`).
+ */
+function wmwp_server_origin(): string {
+	return untrailingslashit( (string) apply_filters( 'wmwp_server_origin', wmwp_configured_api_urls()['origin'] ) );
 }
 
 /** URL dell'API Elasticsearch dello shard configurato, '' se shard o app id mancano. */
@@ -121,6 +142,11 @@ add_action(
 	function () {
 		register_setting( 'wmwp_settings', WMWP_OPTION_SHARD, [ 'type' => 'string', 'sanitize_callback' => 'sanitize_key' ] );
 		register_setting( 'wmwp_settings', WMWP_OPTION_APP_ID, [ 'type' => 'integer', 'sanitize_callback' => 'absint' ] );
+		// Base degli indirizzi dei dettagli (oc:8969): per tracce e POI, dal tipo o da una pagina
+		foreach ( WMWP_DETAIL_TYPES as $type ) {
+			register_setting( 'wmwp_settings', wmwp_detail_use_page_option( $type ), [ 'type' => 'boolean', 'sanitize_callback' => 'rest_sanitize_boolean' ] );
+			register_setting( 'wmwp_settings', wmwp_detail_page_option( $type ), [ 'type' => 'integer', 'sanitize_callback' => 'absint' ] );
+		}
 	}
 );
 
@@ -169,6 +195,50 @@ function wmwp_render_settings_page(): void {
 					<th scope="row"><?php echo esc_html__( 'Elasticsearch API', 'wp-package' ); ?></th>
 					<td><code><?php echo $elastic ? esc_html( $elastic ) : esc_html__( 'not configured', 'wp-package' ); ?></code></td>
 				</tr>
+			</table>
+			<h2><?php echo esc_html__( 'Detail pages', 'wp-package' ); ?></h2>
+			<p><?php echo esc_html__( 'By default the address of a detail page starts with its type: the route type of a track (e.g. /trail/…, /track/ without one) and the POI type of a point of interest (/poi/ without one). Under a page, every address starts with the path of that page.', 'wp-package' ); ?></p>
+			<table class="form-table" role="presentation">
+				<?php
+				$labels = [
+					'track' => __( 'Tracks', 'wp-package' ),
+					'poi'   => __( 'Points of interest', 'wp-package' ),
+				];
+				foreach ( WMWP_DETAIL_TYPES as $type ) :
+					$use_option  = wmwp_detail_use_page_option( $type );
+					$page_option = wmwp_detail_page_option( $type );
+					$use_page    = (bool) get_option( $use_option, false );
+					$forced      = has_filter( 'pre_option_' . $use_option ) || has_filter( 'pre_option_' . $page_option );
+					?>
+					<tr>
+						<th scope="row"><?php echo esc_html( $labels[ $type ] ); ?></th>
+						<td>
+							<fieldset>
+								<label for="<?php echo esc_attr( $use_option ); ?>">
+									<input type="checkbox" name="<?php echo esc_attr( $use_option ); ?>" id="<?php echo esc_attr( $use_option ); ?>" value="1" <?php checked( $use_page ); ?> <?php disabled( $forced ); ?>>
+									<?php echo esc_html__( 'Address under a page', 'wp-package' ); ?>
+								</label>
+								<p>
+									<label class="screen-reader-text" for="<?php echo esc_attr( $page_option ); ?>"><?php echo esc_html__( 'Page', 'wp-package' ); ?></label>
+									<?php
+									wp_dropdown_pages(
+										[
+											'name'              => esc_attr( $page_option ),
+											'id'                => esc_attr( $page_option ),
+											'selected'          => (int) get_option( $page_option, 0 ),
+											'show_option_none'  => esc_html__( '— Select —', 'wp-package' ),
+											'option_none_value' => '0',
+										]
+									);
+									?>
+								</p>
+								<?php if ( $forced ) : ?>
+									<p class="description"><?php echo esc_html__( 'Set by the theme: changes here have no effect.', 'wp-package' ); ?></p>
+								<?php endif; ?>
+							</fieldset>
+						</td>
+					</tr>
+				<?php endforeach; ?>
 			</table>
 			<?php submit_button(); ?>
 		</form>

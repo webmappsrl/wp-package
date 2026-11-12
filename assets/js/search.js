@@ -784,8 +784,8 @@
   }
 
   // Riquadro al clic su un percorso: la card del risultato (template wmwp-card), con i dati già in memoria. Il clic sulla
-  // mappa non apre il percorso: prima le informazioni essenziali, poi la scheda (resoconto del 12/08, § 4.2), che si
-  // raggiungerà dalla card quando il percorso avrà un indirizzo (`link_template`, oggi vuoto)
+  // mappa non apre il percorso: prima le informazioni essenziali, poi il dettaglio (resoconto del 12/08, § 4.2), che si
+  // raggiunge dalla card con l'indirizzo per id di `link_template` (oc:8969)
   function mapPopup(properties) {
     var impl = mapSource && impls[mapSource.id];
     var item = impl && impl.map && typeof impl.map.card === 'function' ? impl.map.card(properties.id, config.lang) : null;
