@@ -79,3 +79,97 @@ test('con i selezionati, quelli tengono il colore del loro layer e gli altri res
   assert.equal(sentiero.context, true);
   assert.equal(sentiero.strokeColor, '#5B7A99');
 });
+
+// Mappa del dettaglio (oc:8969): tracce con uno stile ciascuna (la principale, le collegate) e punti numerati
+test('detail: ogni traccia con il suo stile, nell\'ordine chiesto; le tracce che l\'API non ha si saltano', () => {
+  const features = [feature(5, 'C 104 A'), feature(6, 'C 104'), feature(7, 'C 105')];
+  const out = M.detail(features, {
+    tracks: [
+      { id: 6, color: '#5B7A99', width: 2.5, dash: [7, 5], context: true, tooltip: 'C 104 · Monte', url: '/sentiero/monte/' },
+      { id: 5, color: '#DE1B0D', width: 4, label: 'C 104 A' },
+      { id: 99, color: '#000' }
+    ]
+  });
+  assert.equal(out.type, 'FeatureCollection');
+  assert.equal(out.features.length, 2);
+  assert.deepEqual(out.features[0].properties, {
+    id: 6,
+    tooltip: 'C 104 · Monte',
+    lineLabel: '',
+    strokeColor: '#5B7A99',
+    strokeWidth: 2.5,
+    strokeDash: [7, 5],
+    context: true,
+    clickAction: 'link',
+    link: '/sentiero/monte/'
+  });
+  assert.deepEqual(out.features[1].properties, { id: 5, tooltip: 'C 104 A', lineLabel: 'C 104 A', strokeColor: '#DE1B0D', strokeWidth: 4 });
+  assert.deepEqual(out.features[1].geometry, feature(5).geometry);
+});
+
+test('detail: senza stile la traccia è rossa da 4 px, con il codice dell\'API nel tooltip o l\'id', () => {
+  const out = M.detail([feature(8, null)], { tracks: [{ id: 8 }] });
+  assert.deepEqual(out.features[0].properties, { id: 8, tooltip: '8', lineLabel: '', strokeColor: '#DE1B0D', strokeWidth: 4 });
+});
+
+test('detail: i punti dopo le tracce, con colore, numero, tooltip e link; senza coordinate valide si saltano', () => {
+  const out = M.detail([], {
+    points: [
+      { coordinates: [9.52, 39.87], color: '#B7127F', number: 1, tooltip: 'Tavolo', url: '/punti-di-interesse/tavolo/' },
+      { coordinates: [9.5, 39.8], color: '#1A1A1A' },
+      { coordinates: ['x', 39] },
+      {}
+    ]
+  });
+  assert.equal(out.features.length, 2);
+  assert.deepEqual(out.features[0], {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [9.52, 39.87] },
+    properties: {
+      tooltip: 'Tavolo',
+      pointFillColor: '#B7127F',
+      pointStrokeColor: '#FFFFFF',
+      pointStrokeWidth: 2,
+      pointRadius: 9,
+      number: '1',
+      clickAction: 'link',
+      link: '/punti-di-interesse/tavolo/'
+    }
+  });
+  // senza numero il punto è più piccolo e senza testo
+  assert.equal(out.features[1].properties.pointRadius, 7);
+  assert.equal(out.features[1].properties.number, undefined);
+  assert.equal(out.features[1].properties.pointFillColor, '#1A1A1A');
+});
+
+// Partenza e arrivo della traccia principale (oc:8969), come la mappa di GeoHub del sito attuale: cerchio verde
+// all'inizio, bandiera a scacchi alla fine; in un anello (fine entro 50 m dall'inizio) solo la partenza
+const linea = (id, coordinates) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates }, properties: { id } });
+
+test('detail: con ends, partenza e arrivo dopo le tracce e prima dei punti, con le etichette nel tooltip', () => {
+  const out = M.detail([linea(5, [[9.5, 39.8], [9.51, 39.81], [9.53, 39.84]])], {
+    tracks: [{ id: 5, ends: { start: 'Partenza', end: 'Arrivo' } }],
+    points: [{ coordinates: [9.52, 39.83], number: 1 }]
+  });
+  assert.equal(out.features.length, 4);
+  assert.deepEqual(out.features[1].geometry, { type: 'Point', coordinates: [9.5, 39.8] });
+  assert.equal(out.features[1].properties.endpoint, 'start');
+  assert.equal(out.features[1].properties.tooltip, 'Partenza');
+  assert.deepEqual(out.features[2].geometry, { type: 'Point', coordinates: [9.53, 39.84] });
+  assert.equal(out.features[2].properties.endpoint, 'end');
+  assert.equal(out.features[2].properties.tooltip, 'Arrivo');
+  assert.equal(out.features[3].properties.number, '1');
+});
+
+test('detail: partenza e arrivo di una MultiLineString dalla prima e dall\'ultima linea', () => {
+  const multi = { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: [[[9, 39], [9.1, 39.1]], [[9.2, 39.2], [9.3, 39.3]]] }, properties: { id: 6 } };
+  const out = M.detail([multi], { tracks: [{ id: 6, ends: { start: 'S', end: 'E' } }] });
+  assert.deepEqual(out.features.filter((f) => f.properties.endpoint).map((f) => f.geometry.coordinates), [[9, 39], [9.3, 39.3]]);
+});
+
+test('detail: anello (fine entro 50 m dall\'inizio) → solo la partenza; senza ends niente', () => {
+  const anello = linea(7, [[9.5, 39.8], [9.52, 39.82], [9.5002, 39.8002]]);
+  const out = M.detail([anello], { tracks: [{ id: 7, ends: { start: 'Partenza', end: 'Arrivo' } }] });
+  assert.deepEqual(out.features.filter((f) => f.properties.endpoint).map((f) => f.properties.endpoint), ['start']);
+  assert.equal(M.detail([anello], { tracks: [{ id: 7 }] }).features.filter((f) => f.properties.endpoint).length, 0);
+});

@@ -112,7 +112,8 @@ function wmwp_search_sources(): array {
 			'endpoint'        => wmwp_elastic_url(),
 			'app'             => wmwp_app_param(),
 			'facets'          => [],
-			'link_template'   => '',
+			// Indirizzo per id del dettaglio (oc:8969), nella lingua della pagina; il tema lo può cambiare
+			'link_template'   => wmwp_detail_link_template( 'track' ),
 			'badge_field'     => '',
 			'meta_facet'      => '',
 			// Selezione e scarico di più percorsi: URL di `api/ec/track/multiple` ('' = niente selezione), nome di

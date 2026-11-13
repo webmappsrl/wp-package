@@ -3,6 +3,33 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.2.0 — 2026-11-13
+
+### Aggiunto
+- Pagine di dettaglio di tracce e POI senza post: indirizzi `/<base>/<slug>/` per lingua con base dal tipo o da una
+  pagina scelta nelle impostazioni, indice dalle API dello shard, JSON della traccia dal file su AWS con richiesta condizionale (ETag/Last-Modified) e del POI dallo shard, cache breve di 60 s (`wmwp_detail_cache_ttl`), 301/404/503, template
+  `track.php`, `poi.php`, `detail-unavailable.php` sostituibili dal tema, SEO con il solo core (adattatori per
+  Impreza, Yoast, Rank Math), `hreflang` e selettore di lingua con WPML, sitemap del core (oc:8969).
+- `wmwp_webapp_url()` e il campo «Webapp» nelle impostazioni: indirizzo della webapp dello shard (dominio proprio da
+  `environment.ts` o `https://<app ID>.<shard>.webmapp.it/`), anche con il focus su una traccia o un POI (oc:8969).
+- `wmwp_map()`: mappa del dettaglio per i temi, con tracce di stili diversi (la principale, le collegate tratteggiate) e
+  punti numerati come la legenda; numeri sui punti aggiunti nella build della mappa (`map/src/index.js`) (oc:8969).
+  Con `ends` sulla traccia, partenza (cerchio verde) e arrivo (bandiera a scacchi, `getAdditionalPointStyles` del
+  componente); in un anello solo la partenza (oc:8969).
+- `wmwp_icon_svg()`: SVG di un'icona del set IcoMoon dello shard (`<awsApi>/json/icons.json`) dal nome, con cache dei
+  nomi già chiesti (oc:8969).
+- Indirizzo per id `?wmwp_detail=&wmwp_id=` come `link_template` predefinito della ricerca (oc:8969).
+- Indirizzo per id controllato con la chiave stabile e con un 302 (`wmwp_detail_url_by_id()`); elemento cancellato →
+  404 invece di 503; rinomina → 301; indice rifatto ogni ora dal cron (`wmwp_detail_refresh_index`) e letto una volta
+  per richiesta; regola di rewrite che lascia a WordPress feed, embed e pagine dei commenti della pagina base (oc:8969,
+  review interna).
+- Chiave stabile dei dettagli, `wmwp_detail_source()` e filtro `wmwp_detail_source` (di base `out_source_feature_id`):
+  riconosce tracce e POI dopo un reset degli id dello shard, anche le tracce, e dà ai doppioni dello slug il suffisso
+  `-<chiave>` invece di `-<id>`, stabile fra un reset e l'altro (oc:8969).
+- Filtri `wmwp_api_urls` e `wmwp_server_origin` per uno shard fuori da `environment.ts` o raggiunto dal server da un
+  altro indirizzo (oc:8969). Anche il config.json dell'app (carta Webmapp e colori dei layer) si legge all'indirizzo del
+  server: con WordPress in Docker e lo shard sull'host la mappa restava su OpenStreetMap.
+
 ## 0.1.0 — non rilasciata
 
 ### Aggiunto

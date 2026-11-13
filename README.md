@@ -94,6 +94,19 @@ il parametro e la ricerca torna alla pagina 1) torna al predefinito, con un avvi
 per la `key` di un filtro: se è una query var o il nome di un parametro prende il prefisso `f_` (`year` → `f_year`,
 anche in `meta_facet`).
 
+**`wmwp_api_urls`** — `[ 'elastic_api' => …, 'origin' => …, 'aws_api' => … ]` dello shard configurato: per uno
+shard che non sta in `environment.ts` (es. in locale). **`wmwp_server_origin`** — origin dello shard per le richieste
+del server WordPress, se diverso da quello del browser (es. WordPress in Docker: `http://host.docker.internal:8000`).
+Vale per tutte le richieste del server allo shard (config.json dell'app per carta e colori, indice e dettagli), che
+passano da `wmwp_server_url()`.
+
+**`wmwp_detail_items`** — elementi dell'indice dei dettagli (`type`, `id`, `names`, `kind`, `source`) prima della
+costruzione. **`wmwp_detail_source`** — chiave stabile di una traccia o di un POI (`$source`, `$type`, `$props`), che
+non cambia quando lo shard rinumera gli id: di base `out_source_feature_id`. Si chiama sulle proprietà del dettaglio,
+su quelle di `pois.geojson` e sul `_source` dell'indice Elasticsearch delle tracce: un tema che la cambia legge tutte e
+tre le forme (es. Forestas: il nid di Drupal, `forestas.sardegnasentieri_id` o `sardegnasentieri_id`). **`wmwp_detail_meta`** — meta del dettaglio (`title`, `description`, `image`, `url`, `locale`).
+**`wmwp_detail_print_meta`** — `false` per non far stampare i meta al plugin (predefinito: `true` senza Impreza).
+
 ### JavaScript
 
 `window.wmWpSearch.registerSource( id, { search( query, signal ) } )`, da chiamare prima di
@@ -145,7 +158,18 @@ richieste, 11,5 MB, circa 7 secondi; dopo, un filtro risponde in 0,3 secondi.
 
 ### Template
 
-Si sostituiscono copiandoli in `wp-package/` nel tema: `search.php` (scheletro), `card.php`, `row.php`. Il JS
+Si sostituiscono copiandoli in `wp-package/` nel tema: `search.php` (scheletro), `card.php`, `row.php`; per i
+dettagli `track.php`, `poi.php` e `detail-unavailable.php`, che ricevono `$detail` (`wmwp_detail_current()`: `type`,
+`id`, `lang`, `path`, `name`, `url`, `urls` per lingua, `feature` con il JSON dello shard, le cui chiavi possono mancare)
+e aprono e chiudono la pagina con `wmwp_template_header()`/`wmwp_template_footer()` (temi classici e a blocchi). Sul
+`body` dei dettagli: `wmwp-detail`, `wmwp-detail-<type>`.
+
+Funzioni dei dettagli per i temi: `wmwp_detail_url( $type, $id, $lang )` (indirizzo dall'indice, '' se l'elemento non
+c'è; `$lang` è il codice WPML, es. `en-us`), `wmwp_detail_urls( $type, $id )` (lingua → indirizzo),
+`wmwp_detail_url_by_id( $type, $id, $lang )` (come la prima, ma controlla con la chiave stabile che l'id sia ancora
+dello stesso elemento e, se serve, ricostruisce l'indice: la usa l'indirizzo per id), `wmwp_detail_source( $type,
+$props )` (chiave stabile). Per le richieste allo shard `wmwp_http_json( $url, $timeout, $headers )` restituisce stato
+HTTP (0 se la richiesta non arriva), JSON decodificato e risposta (`includes/http.php`). Il JS
 cerca gli elementi `data-wmwp`. Il `<noscript>` di `search.php` manda alla ricerca di WordPress con `nojs=1`: un tema che
 reindirizza `?s=` alla pagina di ricerca non deve farlo quando c'è quel parametro. Una sola ricerca per pagina
 (gli id dello scheletro sono fissi). Classi su cui il tema può contare: `wmwp-search`, `wmwp-card`, `wmwp-row`,
@@ -165,12 +189,24 @@ OpenLayers 9), lo stesso del campo Nova, compilato com'è in `assets/dist/wp-pac
 compressi). Il file compilato è versionato: WordPress non ha bisogno di Node. Come si ricompila e come si porta a un
 commit più recente di wm-package: [map/README.md](map/README.md).
 
-Si usa in tre modi:
+Si usa in quattro modi:
 
 - **Ricerca:** la vista «Mappa» (sopra). Il file della mappa si carica solo al primo passaggio alla vista.
 - **Shortcode `[wmwp_map]`:** `tracks="343,250"` (id delle tracce dello shard, lette da `api/ec/track/multiple`)
   oppure `geojson="https://…/api/ec/poi/12.geojson"` (un GeoJSON qualsiasi); `height` in pixel (420), `label` per
   gli screen reader («Map»). Senza dati, o con le tracce ma senza shard configurato, non stampa niente.
+- **Mappa del dettaglio, da PHP:** `wmwp_map( [ 'tracks' => [...], 'points' => [...], 'height' => 460, 'label' => '…' ] )`
+  restituisce il contenitore della mappa (oc:8969). Ogni traccia è `[ 'id', 'color', 'width', 'dash', 'context',
+  'label', 'tooltip', 'url', 'ends' ]`: `context` la disegna sotto le altre e fuori dall'inquadratura, `dash` la
+  tratteggia, `label` è il testo lungo la linea, `url` la scheda che si apre al clic, `ends` (`true` o `[ 'start' =>
+  '…', 'end' => '…' ]`, le etichette del tooltip; di base «Partenza» e «Arrivo» tradotte) mette un cerchio verde
+  all'inizio e una bandiera a scacchi alla fine, come la mappa di GeoHub dei siti Drupal; in un anello, con la fine
+  entro 50 m dall'inizio, solo la partenza. I due segni hanno raggio 15, come il cerchio di GeoHub e più dei punti
+  (raggio 9): un punto sopra lascia vedere l'anello intorno. Ogni punto è `[ 'coordinates' => [ lon,
+  lat ], 'color', 'number', 'tooltip', 'url' ]`: con `number` il punto è più grande e porta il numero al centro, per
+  legarlo alla legenda che stampa il tema. Le geometrie delle tracce si leggono da `api/ec/track/multiple`; i colori
+  validi sono esadecimali o rgb()/rgba(), gli indirizzi solo http(s). Senza tracce né punti, ''. In JS la stessa
+  composizione è `wmWpTrackMap.detail( features, { tracks, points } )`.
 - **JavaScript:** si accoda `wmwp-map` (script e stile registrati da `includes/map.php`), poi
   `window.wmWpMap.mount( element, options )` → `{ update( geojson, { keepView, keepPopup } ), destroy() }`; `update()`
   inquadra i dati nuovi, con `keepView: true` lascia la vista dov'è (per disegnare i dati man mano che arrivano), con
@@ -218,6 +254,72 @@ fissa (qui sostituita da fuori, `tiles`), testo «Caricamento mappa...» solo in
 predefinito con le classi di Nova (qui non si usa: il clic lo decide `onFeatureClick`), etichette delle linee nel
 colore della linea.
 
+## Pagine di dettaglio
+
+Ogni traccia e ogni POI dello shard ha una pagina, senza post in WordPress: l'indirizzo `/<base>/<slug>/` (con WPML
+`/en/<base>/<slug>/`) si risolve con un indice costruito dalla lista delle tracce dell'API Elasticsearch e da
+`pois.geojson`, e il JSON del dettaglio si legge con una **cache breve di 60 secondi** (oc:8969; il perché delle
+scelte e la loro storia in [docs/knowledge/8969-…](docs/knowledge/8969-pagine-di-dettaglio-di-percorsi-e-punti-di-interesse-sul-sito-wordpress.md)):
+
+- **traccia**: il file pubblicato dallo shard, `<awsApi>/tracks/<id>.json`, con l'`awsApi` che `environment.ts` dà
+  per lo shard scelto. Il plugin non distingue gli ambienti: qualunque cosa ci sia dietro quell'indirizzo (S3, o il
+  MinIO dietro il dominio dello shard), la logica è la stessa. È lo stesso JSON di `api/ec/track/<id>`, che lo shard
+  prende da lì, ma non passa da Laravel. Dopo la cache breve la richiesta è condizionale (`If-None-Match` con l'ETag, se manca `If-Modified-Since`):
+  con il 304 si riusa il JSON già letto, senza scaricarlo. Se il file non c'è ancora (traccia appena creata), o
+  `awsApi` manca, si legge `api/ec/track/<id>`;
+- **POI**: `api/ec/poi/<id>` dello shard, che costruisce il dettaglio a ogni chiamata (un file per POI non esiste).
+
+Una modifica nel backend si vede entro un minuto. La durata si cambia con il filtro `wmwp_detail_cache_ttl` (0 spegne la
+cache); il JSON resta salvato 6 ore per la richiesta condizionale, gli errori non vanno in cache, e un JSON in cache
+che non torna più con l'indirizzo (rinomina) si rilegge subito. `aws_api` si può cambiare con il filtro
+`wmwp_api_urls`, come gli altri indirizzi, e lo usa solo il server.
+
+**Webapp dello shard.** `wmwp_webapp_url()` restituisce l'indirizzo della webapp dello shard e dell'app configurati,
+con la barra finale: quello scritto nelle impostazioni («Webapp», opzione `wmwp_webapp_url`), altrimenti il dominio
+proprio dichiarato nei `redirects` di `environment.ts` per quello shard e quell'app, altrimenti
+`https://<app ID>.<shard>.webmapp.it/` (es. `https://1.forestasdev.webmapp.it/`); il filtro `wmwp_webapp_url` lo può
+cambiare. `wmwp_webapp_url( 'track', $id )` e `( 'poi', $id )` aprono la mappa su quell'elemento (`#/map?track=<id>`,
+`#/map?poi=<id>`, id dello shard). I `redirects` si leggono con gli shard e restano in cache un giorno (oc:8969).
+
+**Icone del set dello shard.** `wmwp_icon_svg( $nome )` restituisce l'SVG di un'icona del set IcoMoon dello shard,
+`<awsApi>/json/icons.json` (lo stesso di Nova e dell'app, caricato da `/icons-upload`), decorativo e con il colore del
+testo; '' se il nome non c'è. Il nome di solito è `icon_name` di un termine nel JSON del dettaglio. Il set (circa 1 MB)
+si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano in cache un giorno (transient
+`wmwp_icons`), un'ora se il set non risponde (oc:8969).
+
+- **Base**, per tracce e POI, nelle impostazioni «WP Package»: dal tipo (il nome del `route-type` o del `poi-type`
+  nella lingua, `track`/`poi` se manca) oppure, con «Indirizzo sotto una pagina», il percorso della pagina scelta.
+  Le opzioni sono `wmwp_detail_tracks_use_page`, `wmwp_detail_tracks_page`, `wmwp_detail_pois_use_page`,
+  `wmwp_detail_pois_page`: un tema le impone con `pre_option_<nome>`.
+- **Slug**: il nome nella lingua della pagina (italiano se manca) passato in `sanitize_title`; i doppioni nella stessa
+  base prendono `-<chiave stabile>` (filtro `wmwp_detail_source`), così l'indirizzo non cambia con un reset degli id
+  dello shard, o `-<id>` se l'elemento non ce l'ha. Una traduzione aggiunta o un nome cambiato cambiano l'indirizzo da
+  soli: alla prima richiesta del vecchio l'indice si ricostruisce (se permesso) e risponde con un 301 al nuovo.
+- **Risposte**: 200; 301 se lo slug è di un'altra lingua, la base è cambiata o l'elemento è stato rinominato; 404 se
+  l'indirizzo non c'è o la fonte dice che l'elemento non c'è più (prima l'indice si ricostruisce una volta, al massimo
+  ogni 5 minuti); 503 con `Retry-After` solo se la fonte non risponde (rete, timeout, 5xx). Prima di stampare si
+  controlla che l'id porti ancora all'elemento chiesto: la chiave stabile, se c'è nel dettaglio e nell'indice (una
+  traccia rinominata resta lei, una omonima che ha preso il suo id no); altrimenti lo slug del nome. Il dettaglio di un
+  POI non ha il nome, che viene dall'indice. Il ripiego per slug (base cambiata) resta fra i tipi della base chiesta.
+- **Indice**: transient `wmwp_detail_index` (2 ore, letto una volta per richiesta) più l'ultimo buono in
+  `wmwp_detail_index_last`; un evento cron (`wmwp_detail_refresh_index`) lo rifà ogni ora, così di solito la
+  ricostruzione non la paga un visitatore. Non si salva mai vuoto, e un tipo che cala sotto la metà si scarta per due
+  volte di fila (alla terza si accetta). Il JSON di ogni dettaglio resta in cache 6 ore per la richiesta condizionale;
+  il controllo dopo la cache breve è un transient a parte, così con il 304 il JSON non si riscrive.
+- **Regola di rewrite**: `<base>/<slug>` tranne feed, embed, trackback e pagine dei commenti della pagina base, che
+  restano a WordPress; i nomi riservati di WordPress (`feed`, `page`, `search`…) non diventano basi.
+- **Indirizzo per id**: `?wmwp_detail=<track|poi>&wmwp_id=<id>` manda con un 302 (la destinazione cambia con una
+  rinomina o un reset) al dettaglio nella lingua della richiesta, dopo aver controllato con la chiave stabile che l'id
+  sia ancora dello stesso elemento: un id nuovo o passato a un altro elemento ricostruisce l'indice una volta; è il `link_template` predefinito della source `tracks` (`wmwp_detail_link_template()`), quindi righe,
+  card e card della mappa della ricerca portano al dettaglio.
+- **SEO**, con il solo core: titolo, `description`, Open Graph e canonical stampati dal plugin; con Impreza i dati
+  vanno nei suoi `us_meta_tags`/`us_rel_canonical`, con Yoast o Rank Math i loro meta si tolgono sui dettagli. Con
+  WPML: `hreflang` (li stampa il plugin: WPML lo fa solo per i post) e selettore di lingua sullo stesso elemento.
+- **Sitemap**: provider `wmwpdetail` nella sitemap del core, sottotipi `track` e `poi`, ogni elemento in ogni lingua
+  (solo con `blog_public = 1`).
+- **Rewrite**: regole per le sole basi in uso, rigenerate quando l'elenco delle basi cambia; una pagina vera con lo
+  stesso percorso la serve WordPress.
+
 ## Traduzioni
 
 Testi di base in inglese, traduzione italiana in `languages/`. Per rigenerarle con WP-CLI:
@@ -232,5 +334,7 @@ GPX, KML e GeoJSON (Node 18 o successivo; con Node 22 `node --test tests/js/` se
 Con WP-CLI, dalla cartella di WordPress: `wp eval-file <plugin>/tests/php/shards-fallback.php` prova la
 configurazione degli shard con wm-types che non risponde, `map-tiles.php` la carta di base e i colori dei layer letti
 dal `config.json` dell'app (risposte finte), `search-params.php` i nomi dei parametri e delle chiavi dei filtri che
-non possono essere query var di WordPress. Test e sorgente della mappa restano fuori dall'archivio del repo
+non possono essere query var di WordPress, `detail-index.php`, `detail-base.php`, `detail-cache.php`, `detail-aws.php`, `icons.php`, `map-detail.php`, `webapp-url.php`,
+`detail-route.php`, `detail-render.php`, `detail-seo.php`, `detail-sitemap.php` le pagine di dettaglio (slug, basi,
+cache dell'indice con lo shard finto, risoluzione e redirect, controllo dell'elemento, meta, sitemap e hreflang). Test e sorgente della mappa restano fuori dall'archivio del repo
 (`.gitattributes`).

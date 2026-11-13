@@ -44,6 +44,10 @@ import KeyboardPan from 'ol/interaction/KeyboardPan';
 import KeyboardZoom from 'ol/interaction/KeyboardZoom';
 import Overlay from 'ol/Overlay';
 import TileLayer from 'ol/layer/Tile';
+import VectorLayer from 'ol/layer/Vector';
+import VectorSource from 'ol/source/Vector';
+import GeoJSON from 'ol/format/GeoJSON';
+import { Fill, Icon, Style, Text } from 'ol/style';
 import XYZ from 'ol/source/XYZ';
 import FeatureCollectionMap from '../wm-package/src/Nova/Fields/FeatureCollectionMap/resources/js/components/FeatureCollectionMap.vue';
 // Stili di OpenLayers (controlli, attribuzione): in Nova li carica resources/sass/field.scss del campo, che qui non c'è
@@ -181,6 +185,54 @@ function name(button, label) {
   }
 }
 
+// Bandiera a scacchi dell'arrivo (oc:8969), grande quanto il cerchio che il componente disegna per l'arrivo (raggio
+// 15, bordo bianco di 3: assets/js/track-map.js). Sta nello stesso layer, come stile in più del punto
+// (getAdditionalPointStyles del componente): sopra la traccia e sotto i punti di interesse disegnati dopo, che la
+// coprono al centro lasciando vedere l'anello a scacchi intorno, come il verde della partenza
+const FLAG = new Style({
+  image: new Icon({
+    src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><defs>'
+      + '<pattern id="s" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#fff"/>'
+      + '<rect width="3" height="3" fill="#1A1A1A"/><rect x="3" y="3" width="3" height="3" fill="#1A1A1A"/></pattern></defs>'
+      + '<circle cx="18" cy="18" r="15" fill="url(#s)" stroke="#fff" stroke-width="3"/></svg>'
+    ),
+    width: 36,
+    height: 36
+  })
+});
+
+// Numeri sui punti (oc:8969): il componente scrive testi solo lungo le linee; i punti con `number` nelle properties
+// (assets/js/track-map.js, detail()) lo portano al centro del cerchio, bianco, in un layer sopra quello del componente
+function numberLayer(olMap) {
+  const source = new VectorSource();
+  const layer = new VectorLayer({
+    source,
+    zIndex: 1000,
+    style: (feature) => new Style({
+      text: new Text({
+        text: String(feature.get('number')),
+        font: 'bold 11px sans-serif',
+        fill: new Fill({ color: '#FFFFFF' })
+      })
+    })
+  });
+  olMap.addLayer(layer);
+  const format = new GeoJSON();
+  return (geojson) => {
+    source.clear();
+    const list = (geojson && geojson.features) || [];
+    const numbered = list.filter((feature) => feature && feature.geometry && feature.geometry.type === 'Point'
+      && feature.properties && feature.properties.number);
+    if (numbered.length) {
+      source.addFeatures(format.readFeatures({ type: 'FeatureCollection', features: numbered }, {
+        dataProjection: 'EPSG:4326',
+        featureProjection: olMap.getView().getProjection()
+      }));
+    }
+  };
+}
+
 export function mount(element, options = {}) {
   const data = shallowReactive({ geojson: raw(options.geojson), keepView: false });
   const onClick = typeof options.onFeatureClick === 'function' ? options.onFeatureClick : null;
@@ -201,6 +253,7 @@ export function mount(element, options = {}) {
       height: options.height || 420,
       padding: options.padding ?? 40,
       enableSlopeChart: !!options.slopeChart,
+      getAdditionalPointStyles: (feature) => (feature.get('endpoint') === 'end' ? FLAG : null),
       // Senza `link` nelle properties il componente non apre niente da sé e manda action 'none': il clic lo decide
       // chi usa la mappa (la ricerca non passa onFeatureClick e apre il riquadro con popup)
       onFeatureClick: (event) => {
@@ -257,6 +310,8 @@ export function mount(element, options = {}) {
     hidePopup = box.hide;
     cleanups.push(box.remove);
   }
+  const numbers = olMap ? numberLayer(olMap) : () => {};
+  numbers(options.geojson);
   if (olMap) {
     setupKeyboard(olMap, labels.keyboard);
     cleanups.push(setupTooltip(element, olMap));
@@ -281,6 +336,7 @@ export function mount(element, options = {}) {
       }
       data.keepView = !!updateOptions.keepView;
       data.geojson = raw(geojson);
+      numbers(geojson);
     },
     destroy() {
       cleanups.forEach((remove) => remove());
