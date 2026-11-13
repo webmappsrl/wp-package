@@ -3,7 +3,7 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
-## 0.2.0 — non rilasciata
+## 0.2.0 — 2026-11-13
 
 ### Aggiunto
 - Pagine di dettaglio di tracce e POI senza post: indirizzi `/<base>/<slug>/` per lingua con base dal tipo o da una
