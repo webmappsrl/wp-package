@@ -4,7 +4,8 @@
  *
  * Le pagine non sono post: un indirizzo `/<base>/<slug>/` si risolve con un indice `percorso → elemento` per lingua,
  * costruito dalla lista delle tracce dell'API Elasticsearch e da `pois.geojson` dello shard. Lo slug viene dal nome
- * (`sanitize_title`), così al backend non serve niente; i doppioni nella stessa base e lingua prendono `-<id>`.
+ * (`sanitize_title`), così al backend non serve niente; i doppioni nella stessa base e lingua prendono `-<fonte>`, la
+ * chiave stabile dell'elemento (`wmwp_detail_source()`), o `-<id>` se non ce l'hanno.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -41,6 +42,21 @@ function wmwp_detail_slug( string $name, int $id ): string {
 }
 
 /**
+ * Chiave stabile di un elemento, che non cambia quando lo shard rinumera gli id (reset, reimport): di base
+ * `out_source_feature_id`, l'id della fonte da cui lo shard ha importato l'elemento; '' se non c'è. Un tema la cambia
+ * con il filtro `wmwp_detail_source` (`$source`, `$type`, `$props`), chiamato su tre forme dei dati: le proprietà del
+ * dettaglio, quelle di `pois.geojson` e il `_source` dell'indice Elasticsearch delle tracce.
+ *
+ * @param string               $type  `track` o `poi`.
+ * @param array<string, mixed> $props Proprietà dell'elemento.
+ */
+function wmwp_detail_source( string $type, array $props ): string {
+	$source = isset( $props['out_source_feature_id'] ) && is_scalar( $props['out_source_feature_id'] ) ? trim( (string) $props['out_source_feature_id'] ) : '';
+	$source = apply_filters( 'wmwp_detail_source', $source, $type, $props );
+	return is_scalar( $source ) ? trim( (string) $source ) : '';
+}
+
+/**
  * Lingue dei dettagli: quelle attive di WPML, o la lingua del sito.
  *
  * @return list<string>
@@ -58,7 +74,7 @@ function wmwp_detail_languages(): array {
  *
  * @param list<array{type: string, id: int, names: mixed, kind: ?array, source?: ?string}> $items Elementi: tipo
  *        (`track` o `poi`), id, nomi per lingua, nomi per lingua del loro tipo (`route-type` o `poi-type`, null se
- *        non ce l'hanno) e id della fonte (`out_source_feature_id`, se c'è).
+ *        non ce l'hanno) e chiave stabile (`wmwp_detail_source()`, se c'è).
  * @param callable                                                     $base  function( string $type, ?array $kind, string $lang ): string
  * @param list<string>|null                                            $langs Lingue; null = wmwp_detail_languages().
  * @return array{langs: list<string>, paths: array<string, array<string, array{0: string, 1: int}>>, urls: array<string, array<int, array<string, string>>>, count: int}
@@ -72,8 +88,8 @@ function wmwp_detail_build_index( array $items, callable $base, ?array $langs = 
 		'items' => [],
 		'count' => 0,
 	];
-	// Nomi e id della fonte (`out_source_feature_id`): il dettaglio di un POI non ha il nome, e per controllare che
-	// l'id porti ancora allo stesso elemento serve un dato che non cambia con il reset degli id
+	// Nomi e chiave stabile: il dettaglio di un POI non ha il nome, e per controllare che l'id porti ancora allo stesso
+	// elemento serve un dato che non cambia con il reset degli id
 	foreach ( $items as $item ) {
 		$index['items'][ (string) $item['type'] ][ (int) $item['id'] ] = [
 			'names'  => $item['names'] ?? null,
@@ -91,24 +107,27 @@ function wmwp_detail_build_index( array $items, callable $base, ?array $langs = 
 			$kind = isset( $item['kind'] ) && is_array( $item['kind'] ) ? $item['kind'] : null;
 			$path = $base( $type, $kind, $lang ) . '/' . wmwp_detail_slug( wmwp_detail_text( $item['names'] ?? null, $lang ), $id );
 
-			$planned[]      = [ $type, $id, $path ];
+			$source = isset( $item['source'] ) ? sanitize_title( (string) $item['source'] ) : '';
+
+			$planned[]      = [ $type, $id, $path, '' !== $source ? $source : (string) $id ];
 			$used[ $path ] = ( $used[ $path ] ?? 0 ) + 1;
 		}
-		// Seconda passata: prima gli slug unici, poi i doppioni con -<id>; se anche quello è preso (un altro elemento si
-		// chiama «Foo 5») si aggiunge un numero, così un percorso porta sempre a un elemento solo
+		// Seconda passata: prima gli slug unici, poi i doppioni con -<fonte> (stabile fra un reset e l'altro) o -<id>; se
+		// anche quello è preso (un altro elemento si chiama «Foo 5») si aggiunge un numero, così un percorso porta sempre a
+		// un elemento solo
 		$assigned = [];
 		foreach ( $planned as [ $type, $id, $path ] ) {
 			if ( 1 === $used[ $path ] ) {
 				$assigned[ $path ] = [ $type, $id ];
 			}
 		}
-		foreach ( $planned as [ $type, $id, $path ] ) {
+		foreach ( $planned as [ $type, $id, $path, $suffix ] ) {
 			if ( 1 === $used[ $path ] ) {
 				continue;
 			}
-			$candidate = $path . '-' . $id;
+			$candidate = $path . '-' . $suffix;
 			for ( $n = 2; isset( $assigned[ $candidate ] ); $n++ ) {
-				$candidate = $path . '-' . $id . '-' . $n;
+				$candidate = $path . '-' . $suffix . '-' . $n;
 			}
 			$assigned[ $candidate ] = [ $type, $id ];
 		}
@@ -183,12 +202,13 @@ function wmwp_detail_fetch_items(): ?array {
 		$id   = (int) ( $hit['id'] ?? 0 );
 		$kind = $hit['terms']['route-type'][0]['name'] ?? null;
 		if ( $id > 0 ) {
+			$source  = wmwp_detail_source( 'track', (array) $hit );
 			$items[] = [
 				'type'   => 'track',
 				'id'     => $id,
 				'names'  => $hit['name'] ?? null,
 				'kind'   => is_array( $kind ) ? $kind : null,
-				'source' => null,
+				'source' => '' !== $source ? $source : null,
 			];
 		}
 	}
@@ -197,12 +217,13 @@ function wmwp_detail_fetch_items(): ?array {
 		$id    = (int) ( $props['id'] ?? 0 );
 		$kind  = $props['taxonomies']['poi-type'][0]['name'] ?? null;
 		if ( $id > 0 ) {
+			$source  = wmwp_detail_source( 'poi', $props );
 			$items[] = [
 				'type'   => 'poi',
 				'id'     => $id,
 				'names'  => $props['name'] ?? null,
 				'kind'   => is_array( $kind ) ? $kind : null,
-				'source' => isset( $props['out_source_feature_id'] ) ? (string) $props['out_source_feature_id'] : null,
+				'source' => '' !== $source ? $source : null,
 			];
 		}
 	}

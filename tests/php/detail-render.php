@@ -39,6 +39,7 @@ $index = wmwp_detail_build_index(
 	[
 		[ 'type' => 'track', 'id' => 5, 'names' => [ 'it' => 'Salita' ], 'kind' => [ 'it' => 'Sentiero' ] ],
 		[ 'type' => 'poi', 'id' => 9, 'names' => [ 'it' => 'Nuraghe' ], 'kind' => null, 'source' => 'D-77' ],
+		[ 'type' => 'track', 'id' => 6, 'names' => [ 'it' => 'Discesa' ], 'kind' => [ 'it' => 'Sentiero' ], 'source' => 'T-6' ],
 	],
 	function ( string $type, ?array $kind, string $lang ): string {
 		$name = null === $kind ? '' : wmwp_detail_text( $kind, $lang );
@@ -55,6 +56,8 @@ $shard = [
 	'status' => 200,
 	'track'  => [ 'it' => 'Salita' ],
 	'source' => 'D-77',
+	'track6' => [ 'it' => 'Discesa' ],
+	'fonte6' => 'T-6',
 ];
 add_filter(
 	'pre_http_request',
@@ -62,9 +65,13 @@ add_filter(
 		if ( false === strpos( $url, '/api/ec/' ) ) {
 			return $pre;
 		}
-		$feature = false !== strpos( $url, '/api/ec/track/' )
-			? [ 'type' => 'Feature', 'properties' => [ 'id' => 5, 'name' => $shard['track'] ], 'geometry' => null ]
-			: [ 'type' => 'Feature', 'properties' => [ 'id' => 9, 'out_source_feature_id' => $shard['source'] ], 'geometry' => null ];
+		if ( false !== strpos( $url, '/api/ec/track/6' ) ) {
+			$feature = [ 'type' => 'Feature', 'properties' => [ 'id' => 6, 'name' => $shard['track6'], 'out_source_feature_id' => $shard['fonte6'] ], 'geometry' => null ];
+		} else {
+			$feature = false !== strpos( $url, '/api/ec/track/' )
+				? [ 'type' => 'Feature', 'properties' => [ 'id' => 5, 'name' => $shard['track'] ], 'geometry' => null ]
+				: [ 'type' => 'Feature', 'properties' => [ 'id' => 9, 'out_source_feature_id' => $shard['source'] ], 'geometry' => null ];
+		}
 		return [
 			'headers'  => [],
 			'body'     => 200 === $shard['status'] ? wp_json_encode( $feature ) : 'errore',
@@ -113,6 +120,33 @@ $check( is_array( $detail ) && 'Nuraghe' === $detail['name'], 'POI valido con il
 $shard['source'] = 'D-78';
 delete_transient( 'wmwp_detail_json_poi_9' );
 $check( null === wmwp_detail_load( $poi ), 'POI con un altro id della fonte → null' );
+
+// 3a. Traccia con la chiave stabile della fonte: decide la fonte, non il nome. Rinominata resta lei; con lo stesso nome
+// ma un'altra fonte (dopo un reset l'id è passato a un'altra traccia omonima) è un 404
+$discesa = [
+	'status' => 200,
+	'type'   => 'track',
+	'id'     => 6,
+	'lang'   => 'it',
+	'path'   => 'sentiero/discesa',
+];
+$detail  = wmwp_detail_load( $discesa );
+$check( is_array( $detail ) && 6 === $detail['id'], 'traccia con la stessa fonte' );
+delete_transient( 'wmwp_detail_json_track_6' );
+$shard['track6'] = [ 'it' => 'Discesa al mare' ];
+$check( is_array( wmwp_detail_load( $discesa ) ), 'traccia rinominata con la stessa fonte → resta valida' );
+delete_transient( 'wmwp_detail_json_track_6' );
+$shard['track6'] = [ 'it' => 'Discesa' ];
+$shard['fonte6'] = 'T-99';
+$check( null === wmwp_detail_load( $discesa ), 'stesso nome, altra fonte → null' );
+$shard['fonte6'] = 'T-6';
+delete_transient( 'wmwp_detail_json_track_6' );
+
+// Doppione con l'indirizzo -<fonte> e un dettaglio senza la fonte (file generato prima che la fonte ci fosse): il nome
+// decide, con il suffisso della fonte dell'indice
+$monte = [ 'type' => 'track', 'id' => 21, 'lang' => 'it', 'path' => 'sentiero/monte-4076' ];
+$check( wmwp_detail_matches( $monte, [ 'properties' => [ 'name' => [ 'it' => 'Monte' ] ] ], [ 'source' => '4076' ] ), 'doppione -<fonte>, dettaglio senza fonte' );
+$check( ! wmwp_detail_matches( $monte, [ 'properties' => [ 'name' => [ 'it' => 'Monte' ] ] ], [ 'source' => '4077' ] ), 'doppione -<fonte> di un altro elemento' );
 
 // 3b. Cache breve del JSON (60 s): due letture di fila chiamano lo shard una volta; un errore non si mette in cache
 $shard['source'] = 'D-77';

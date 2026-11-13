@@ -17,6 +17,11 @@ const WMWP_SHARDS_CACHE_KEY  = 'wmwp_shards_config';
 const WMWP_SHARDS_LAST_OPTION = 'wmwp_shards_config_last';
 const WMWP_OPTION_SHARD       = 'wmwp_shard';
 const WMWP_OPTION_APP_ID      = 'wmwp_app_id';
+// Indirizzo della webapp scritto a mano (vuoto: si ricava da shard e app, wmwp_webapp_url())
+const WMWP_OPTION_WEBAPP = 'wmwp_webapp_url';
+// Domini propri delle webapp, dai `redirects` di environment.ts (cache di un giorno e ultima lettura riuscita)
+const WMWP_WEBAPP_REDIRECTS_KEY  = 'wmwp_webapp_redirects';
+const WMWP_WEBAPP_REDIRECTS_LAST = 'wmwp_webapp_redirects_last';
 
 /**
  * Shard dichiarati in `environment.ts`: nome => [ origin, elasticApi, awsApi ].
@@ -60,6 +65,10 @@ function wmwp_get_shards_config( bool $force_refresh = false ): array {
 	if ( $shards ) {
 		set_transient( WMWP_SHARDS_CACHE_KEY, $shards, DAY_IN_SECONDS );
 		update_option( WMWP_SHARDS_LAST_OPTION, $shards, false );
+		// Dallo stesso file, i domini propri delle webapp (wmwp_webapp_url())
+		$redirects = wmwp_parse_webapp_redirects( (string) wp_remote_retrieve_body( $response ) );
+		set_transient( WMWP_WEBAPP_REDIRECTS_KEY, $redirects, DAY_IN_SECONDS );
+		update_option( WMWP_WEBAPP_REDIRECTS_LAST, $redirects, false );
 		return $shards;
 	}
 
@@ -70,6 +79,84 @@ function wmwp_get_shards_config( bool $force_refresh = false ): array {
 	$last = is_array( $last ) ? $last : [];
 	set_transient( WMWP_SHARDS_CACHE_KEY, $last, HOUR_IN_SECONDS );
 	return $last;
+}
+
+/**
+ * Domini propri delle webapp dichiarati nei `redirects` di `environment.ts`: dominio => [ shard, app ]
+ * (es. `'sentieri.caiparma.it': { shardName: 'geohub', appId: 33 }`).
+ *
+ * @return array<string, array{shard: string, app: int}>
+ */
+function wmwp_parse_webapp_redirects( string $content ): array {
+	$start = strpos( $content, 'const redirects' );
+	if ( false === $start ) {
+		return [];
+	}
+	$redirects = [];
+	$pattern   = "/['\"]([a-z0-9.-]+)['\"]\\s*:\\s*\\{\\s*shardName:\\s*['\"](\\w+)['\"]\\s*,\\s*appId:\\s*(\\d+)/i";
+	if ( preg_match_all( $pattern, substr( $content, $start ), $matches, PREG_SET_ORDER ) ) {
+		foreach ( $matches as $match ) {
+			$redirects[ strtolower( $match[1] ) ] = [
+				'shard' => $match[2],
+				'app'   => (int) $match[3],
+			];
+		}
+	}
+	return $redirects;
+}
+
+/**
+ * Domini propri delle webapp: dalla cache, altrimenti rileggendo `environment.ts` una volta, altrimenti l'ultima lettura.
+ *
+ * @return array<string, array{shard: string, app: int}>
+ */
+function wmwp_get_webapp_redirects(): array {
+	$cached = get_transient( WMWP_WEBAPP_REDIRECTS_KEY );
+	if ( false === $cached ) {
+		wmwp_get_shards_config( true );
+		$cached = get_transient( WMWP_WEBAPP_REDIRECTS_KEY );
+	}
+	if ( ! is_array( $cached ) ) {
+		$cached = get_option( WMWP_WEBAPP_REDIRECTS_LAST );
+	}
+	return is_array( $cached ) ? $cached : [];
+}
+
+/**
+ * Indirizzo della webapp dello shard configurato (oc:8969), con la barra finale; '' se mancano shard o app id. Nell'ordine:
+ * l'indirizzo scritto nelle impostazioni (`wmwp_webapp_url`), il dominio proprio dei `redirects` di `environment.ts` per
+ * shard e app, altrimenti `https://<appId>.<shard>.webmapp.it/` (es. `https://1.forestasdev.webmapp.it/`). Il filtro
+ * `wmwp_webapp_url` riceve l'indirizzo e lo può cambiare.
+ *
+ * Con `$type` `track` o `poi` e un id dello shard, l'indirizzo apre la mappa sull'elemento: `#/map?track=<id>` o
+ * `#/map?poi=<id>` (verificati sulla webapp di dev il 13/11).
+ */
+function wmwp_webapp_url( string $type = '', int $id = 0 ): string {
+	$base = trim( (string) get_option( WMWP_OPTION_WEBAPP, '' ) );
+	if ( '' === $base ) {
+		$shard  = (string) get_option( WMWP_OPTION_SHARD, '' );
+		$app_id = (int) get_option( WMWP_OPTION_APP_ID, 0 );
+		if ( '' !== $shard && $app_id > 0 ) {
+			foreach ( wmwp_get_webapp_redirects() as $host => $target ) {
+				if ( $target['shard'] === $shard && (int) $target['app'] === $app_id ) {
+					$base = 'https://' . $host;
+					break;
+				}
+			}
+			$base = '' !== $base ? $base : 'https://' . $app_id . '.' . $shard . '.webmapp.it';
+		}
+	}
+	/**
+	 * Indirizzo della webapp (senza il focus su un elemento).
+	 *
+	 * @param string $base
+	 */
+	$base = trim( (string) apply_filters( 'wmwp_webapp_url', $base ) );
+	if ( '' === $base ) {
+		return '';
+	}
+	$base = trailingslashit( esc_url_raw( $base ) );
+	return in_array( $type, [ 'track', 'poi' ], true ) && $id > 0 ? $base . '#/map?' . $type . '=' . $id : $base;
 }
 
 /**
@@ -154,6 +241,7 @@ add_action(
 	function () {
 		register_setting( 'wmwp_settings', WMWP_OPTION_SHARD, [ 'type' => 'string', 'sanitize_callback' => 'sanitize_key' ] );
 		register_setting( 'wmwp_settings', WMWP_OPTION_APP_ID, [ 'type' => 'integer', 'sanitize_callback' => 'absint' ] );
+		register_setting( 'wmwp_settings', WMWP_OPTION_WEBAPP, [ 'type' => 'string', 'sanitize_callback' => 'esc_url_raw' ] );
 		// Base degli indirizzi dei dettagli (oc:8969): per tracce e POI, dal tipo o da una pagina
 		foreach ( WMWP_DETAIL_TYPES as $type ) {
 			register_setting( 'wmwp_settings', wmwp_detail_use_page_option( $type ), [ 'type' => 'boolean', 'sanitize_callback' => 'rest_sanitize_boolean' ] );
@@ -206,6 +294,13 @@ function wmwp_render_settings_page(): void {
 				<tr>
 					<th scope="row"><?php echo esc_html__( 'Elasticsearch API', 'wp-package' ); ?></th>
 					<td><code><?php echo $elastic ? esc_html( $elastic ) : esc_html__( 'not configured', 'wp-package' ); ?></code></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wmwp_webapp_url"><?php echo esc_html__( 'Webapp', 'wp-package' ); ?></label></th>
+					<td>
+						<input type="url" class="regular-text" name="<?php echo esc_attr( WMWP_OPTION_WEBAPP ); ?>" id="wmwp_webapp_url" value="<?php echo esc_attr( (string) get_option( WMWP_OPTION_WEBAPP, '' ) ); ?>" placeholder="<?php echo esc_attr( wmwp_webapp_url() ); ?>" aria-describedby="wmwp_webapp_url_help">
+						<p class="description" id="wmwp_webapp_url_help"><?php echo esc_html__( 'Leave empty to use the webapp of the shard and app above (a custom domain from environment.ts, or https://<app ID>.<shard>.webmapp.it/).', 'wp-package' ); ?></p>
+					</td>
 				</tr>
 			</table>
 			<h2><?php echo esc_html__( 'Detail pages', 'wp-package' ); ?></h2>

@@ -9,14 +9,14 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-12T11:02:05+00:00\n"
+"POT-Creation-Date: 2026-11-13T11:58:23+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-package\n"
 
 #. Plugin Name of the plugin
 #: index.php
-#: includes/settings.php:168
+#: includes/settings.php:272
 msgid "WP Package"
 msgstr ""
 
@@ -40,7 +40,7 @@ msgstr ""
 msgid "https://webmapp.it"
 msgstr ""
 
-#: includes/map.php:199
+#: includes/map.php:212
 #: templates/search.php:47
 msgid "Map"
 msgstr ""
@@ -93,57 +93,65 @@ msgstr ""
 msgid "Selected trails"
 msgstr ""
 
-#: includes/settings.php:173
+#: includes/settings.php:277
 msgid "Shard"
 msgstr ""
 
-#: includes/settings.php:176
-#: includes/settings.php:225
+#: includes/settings.php:280
+#: includes/settings.php:336
 msgid "— Select —"
 msgstr ""
 
-#: includes/settings.php:182
+#: includes/settings.php:286
 msgid "The shard list could not be loaded from wm-types."
 msgstr ""
 
-#: includes/settings.php:187
+#: includes/settings.php:291
 msgid "App ID"
 msgstr ""
 
-#: includes/settings.php:191
+#: includes/settings.php:295
 msgid "Elasticsearch API"
 msgstr ""
 
-#: includes/settings.php:192
+#: includes/settings.php:296
 msgid "not configured"
 msgstr ""
 
-#: includes/settings.php:195
+#: includes/settings.php:299
+msgid "Webapp"
+msgstr ""
+
+#: includes/settings.php:302
+msgid "Leave empty to use the webapp of the shard and app above (a custom domain from environment.ts, or https://<app ID>.<shard>.webmapp.it/)."
+msgstr ""
+
+#: includes/settings.php:306
 msgid "Detail pages"
 msgstr ""
 
-#: includes/settings.php:196
+#: includes/settings.php:307
 msgid "By default the address of a detail page starts with its type: the route type of a track (e.g. /trail/…, /track/ without one) and the POI type of a point of interest (/poi/ without one). Under a page, every address starts with the path of that page."
 msgstr ""
 
-#: includes/settings.php:200
+#: includes/settings.php:311
 #: templates/search.php:66
 msgid "Tracks"
 msgstr ""
 
-#: includes/settings.php:201
+#: includes/settings.php:312
 msgid "Points of interest"
 msgstr ""
 
-#: includes/settings.php:215
+#: includes/settings.php:326
 msgid "Address under a page"
 msgstr ""
 
-#: includes/settings.php:218
+#: includes/settings.php:329
 msgid "Page"
 msgstr ""
 
-#: includes/settings.php:232
+#: includes/settings.php:343
 msgid "Set by the theme: changes here have no effect."
 msgstr ""
 
@@ -206,32 +214,32 @@ msgstr ""
 msgid "Track format"
 msgstr ""
 
-#: assets/js/map-embed.js:15
+#: assets/js/map-embed.js:16
 #: assets/js/search.js:917
 msgid "The map is not available right now. Please try again later."
 msgstr ""
 
-#: assets/js/map-embed.js:33
+#: assets/js/map-embed.js:34
 #: assets/js/search.js:876
 msgid "Zoom in on the map"
 msgstr ""
 
-#: assets/js/map-embed.js:34
+#: assets/js/map-embed.js:35
 #: assets/js/search.js:877
 msgid "Zoom out of the map"
 msgstr ""
 
-#: assets/js/map-embed.js:35
+#: assets/js/map-embed.js:36
 #: assets/js/search.js:878
 msgid "Show the map full screen"
 msgstr ""
 
-#: assets/js/map-embed.js:36
+#: assets/js/map-embed.js:37
 #: assets/js/search.js:879
 msgid "Exit full screen"
 msgstr ""
 
-#: assets/js/map-embed.js:37
+#: assets/js/map-embed.js:38
 #: assets/js/search.js:881
 msgid "Map: arrow keys to move it, + and − to zoom in and out"
 msgstr ""
@@ -400,4 +408,12 @@ msgstr ""
 #: assets/js/source-tracks.js:222
 #, js-format
 msgid "%s in total"
+msgstr ""
+
+#: includes/map.php:265
+msgid "Start"
+msgstr ""
+
+#: includes/map.php:266
+msgid "Finish"
 msgstr ""

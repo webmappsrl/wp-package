@@ -4,8 +4,8 @@
  *
  * Il JSON si legge dallo shard a ogni richiesta (`api/ec/track/<id>`, `api/ec/poi/<id>`): nessuna cache, i dati sono
  * sempre quelli del backend. Prima di stampare si controlla che l'id porti ancora all'elemento chiesto (dopo un reset
- * dello shard gli id cambiano): per le tracce lo slug del nome, per i POI, il cui dettaglio non ha il nome, l'id della
- * fonte (`out_source_feature_id`). Il template si cerca prima nel tema (`wp-package/<tipo>.php`).
+ * dello shard gli id cambiano): la chiave stabile della fonte (`wmwp_detail_source()`) se c'è nel dettaglio e
+ * nell'indice, altrimenti lo slug del nome. Il template si cerca prima nel tema (`wp-package/<tipo>.php`).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -112,25 +112,37 @@ function wmwp_detail_fetch_file( string $url, ?array $cached ): ?array {
 }
 
 /**
- * L'id porta ancora all'elemento chiesto? Con il nome nel JSON, lo slug richiesto deve essere quello del nome (con o
- * senza `-<id>` dei doppioni); senza nome, l'id della fonte deve essere quello dell'indice.
+ * L'id porta ancora all'elemento chiesto? Se dettaglio e indice hanno la chiave stabile, decide quella: una traccia
+ * rinominata resta lei, una omonima che dopo un reset ha preso quell'id no. Altrimenti, con il nome nel JSON, lo slug
+ * richiesto deve essere quello del nome (con o senza `-<id>` dei doppioni); senza nome né chiave, si accetta.
  *
  * @param array<string, mixed>      $resolved Risultato di wmwp_detail_resolve() con lang e path.
  * @param array<string, mixed>      $feature  JSON del dettaglio.
  * @param array<string, mixed>|null $item     Elemento dell'indice (`items`).
  */
 function wmwp_detail_matches( array $resolved, array $feature, ?array $item ): bool {
-	$props     = $feature['properties'];
+	$props  = $feature['properties'];
+	$source = wmwp_detail_source( (string) $resolved['type'], (array) $props );
+	$known  = (string) ( $item['source'] ?? '' );
+	if ( '' !== $source && '' !== $known ) {
+		return $source === $known;
+	}
 	$requested = substr( (string) $resolved['path'], (int) strrpos( (string) $resolved['path'], '/' ) + 1 );
 	$name      = wmwp_detail_text( $props['name'] ?? null, (string) $resolved['lang'] );
 	if ( '' !== $name ) {
 		$expected = wmwp_detail_slug( $name, (int) $resolved['id'] );
-		// Con -<id> dei doppioni, e un numero in più se anche quello era preso
-		return $requested === $expected || $requested === $expected . '-' . (int) $resolved['id'] || 0 === strpos( $requested, $expected . '-' . (int) $resolved['id'] . '-' );
+		if ( $requested === $expected ) {
+			return true;
+		}
+		// Doppioni: -<fonte> dell'indice o -<id>, e un numero in più se anche quello era preso
+		foreach ( array_filter( [ sanitize_title( $known ), (string) (int) $resolved['id'] ] ) as $suffix ) {
+			if ( $requested === $expected . '-' . $suffix || 0 === strpos( $requested, $expected . '-' . $suffix . '-' ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
-	$source = isset( $props['out_source_feature_id'] ) ? (string) $props['out_source_feature_id'] : '';
-	$known  = (string) ( $item['source'] ?? '' );
-	return '' === $source || '' === $known || $source === $known;
+	return true;
 }
 
 /**

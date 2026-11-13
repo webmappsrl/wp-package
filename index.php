@@ -29,6 +29,7 @@ require_once WMWP_PATH . 'includes/detail-route.php';
 require_once WMWP_PATH . 'includes/detail-render.php';
 require_once WMWP_PATH . 'includes/detail-seo.php';
 require_once WMWP_PATH . 'includes/detail-wpml.php';
+require_once WMWP_PATH . 'includes/icons.php';
 require_once WMWP_PATH . 'includes/class-wmwp-detail-sitemap-provider.php';
 require_once WMWP_PATH . 'includes/search.php';
 require_once WMWP_PATH . 'includes/map.php';

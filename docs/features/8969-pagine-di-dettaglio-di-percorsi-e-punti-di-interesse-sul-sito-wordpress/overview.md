@@ -24,7 +24,7 @@ Dopo questo lavoro il plugin serve le pagine di dettaglio di EcTrack ed EcPoi **
      pagina scelta diventa la base di tutti gli elementi (es. `/punti-di-interesse/<slug>/`);
 2. lo slug si risolve in id con una tabella `slug → id` per lingua, costruita dalla lista delle tracce
    (la risposta dell'API Elasticsearch che la ricerca usa già, con id e nome) e dai POI di
-   `pois.geojson`; slug = `sanitize_title(nome)` nella lingua della pagina, con `-<id>` sui doppioni;
+   `pois.geojson`; slug = `sanitize_title(nome)` nella lingua della pagina, con `-<chiave stabile>` (o `-<id>`) sui doppioni;
    la tabella sta in un transient. **Base e slug seguono la lingua**: nella pagina inglese si usano il
    nome inglese della traccia o del POI e quello del suo `route-type` o `poi-type`, e dove l'inglese
    manca quello italiano (es. `/en/sentiero/salita-sul-monte-corrasi-b-401/` finché manca la
@@ -53,36 +53,39 @@ slug si ricava in WordPress perché id e nome ci sono già: al backend non serve
 
 ## Requisiti
 
-- [ ] La pagina mostra sempre i dati attuali del backend: un elemento aggiunto, modificato o cancellato
+- [x] La pagina mostra sempre i dati attuali del backend: un elemento aggiunto, modificato o cancellato
       (anche da un reset dello shard che riassegna gli id) si vede nel dettaglio entro un minuto (la
       cache breve del JSON), senza interventi, e un indirizzo non mostra mai un elemento diverso da quello richiesto.
-- [ ] Nella pagina delle impostazioni del plugin («WP Package»), per le tracce e per i POI: interruttore
+- [x] Nella pagina delle impostazioni del plugin («WP Package»), per le tracce e per i POI: interruttore
       «Indirizzo sotto una pagina» e select delle pagine. Spento, la base viene dal tipo (`route-type`
       con ripiego `track`, `poi-type` con ripiego `poi`); acceso, dal percorso della pagina scelta.
-- [ ] Un elemento chiesto con la base sbagliata (es. la traccia ha cambiato `route-type`) risponde con
+- [x] Un elemento chiesto con la base sbagliata (es. la traccia ha cambiato `route-type`) risponde con
       un 301 all'indirizzo giusto, mai con la pagina sotto la base vecchia.
-- [ ] Rewrite e query var registrate solo per le basi in uso (quelle ricavate dai dati e la pagina
+- [x] Rewrite e query var registrate solo per le basi in uso (quelle ricavate dai dati e la pagina
       scelta), così le pagine esistenti con lo stesso primo pezzo di indirizzo non vengono
       intercettate; con la base da una pagina, la pagina continua a servire il suo contenuto e il
       dettaglio risponde solo con lo slug dopo. Regole rigenerate quando cambiano le impostazioni o
       compare una base nuova nei dati.
-- [ ] Tabella `slug → id` per tracce e POI in transient; a uno slug non trovato si ricostruisce una
+- [x] Tabella `slug → id` per tracce e POI in transient; a uno slug non trovato si ricostruisce una
       volta prima del 404, così una traccia appena pubblicata è subito raggiungibile.
-- [ ] Doppioni dello slug risolti con `-<id>` sui soli elementi in conflitto; una sola funzione
+- [x] Doppioni dello slug risolti con `-<chiave stabile>` (filtro `wmwp_detail_source`, di base
+      `out_source_feature_id`; `-<id>` senza) sui soli elementi in conflitto; una sola funzione
       produce lo slug, per la tabella, la sitemap e il redirect dell'indirizzo per id.
-- [ ] Base e slug per lingua: nella lingua della pagina se il nome c'è, altrimenti in italiano. Anche
+- [x] Base e slug per lingua: nella lingua della pagina se il nome c'è, altrimenti in italiano. Anche
       questo è dinamico: quando nel backend arriva o cambia una traduzione, l'indirizzo della pagina in
       quella lingua passa al nome nuovo senza interventi.
-- [ ] L'indirizzo che non è più quello giusto (es. slug italiano sotto `/en/` dopo che è arrivata la
+- [x] L'indirizzo che non è più quello giusto (es. slug italiano sotto `/en/` dopo che è arrivata la
       traduzione, o slug dell'altra lingua) risponde con un 301 all'indirizzo attuale, se lo slug si
       trova nelle tabelle; altrimenti 404.
-- [ ] Ogni dettaglio collega le sue versioni nelle due lingue (`hreflang` e selettore di lingua di
+- [x] Ogni dettaglio collega le sue versioni nelle due lingue (`hreflang` e selettore di lingua di
       WPML), ciascuna con il suo indirizzo.
-- [ ] Lettura del JSON della traccia e del dettaglio del POI con timeout; se lo shard non
-      risponde, una pagina d'errore con stato 503, non un 404 e non una pagina vuota.
-- [ ] Template predefiniti minimi (nome, mappa, descrizione) sostituibili copiandoli in `wp-package/`
+- [x] Lettura del JSON con timeout: la traccia dal suo file su AWS (`awsApi` di `environment.ts`; su dev e UAT
+      risponde MinIO dello shard, con la stessa logica) con richiesta condizionale (ETag/Last-Modified), il POI
+      dallo shard (`api/ec/poi/<id>`); cache breve di 60 s (`wmwp_detail_cache_ttl`). Se la fonte non risponde,
+      una pagina d'errore con stato 503, non un 404 e non una pagina vuota.
+- [x] Template predefiniti minimi (nome, mappa, descrizione) sostituibili copiandoli in `wp-package/`
       nel tema, come quelli della ricerca; i dati arrivano al template già letti, in una variabile.
-- [ ] SEO di ogni dettaglio, come una pagina vera, **con il solo core di WordPress, su qualsiasi tema**:
+- [x] SEO di ogni dettaglio, come una pagina vera, **con il solo core di WordPress, su qualsiasi tema**:
       il plugin non dipende da Impreza né da un plugin SEO.
       - titolo del documento (`pre_get_document_title`);
       - meta description e anteprima per i social (`og:title`, `og:description`, `og:image`,
@@ -96,19 +99,27 @@ slug si ricava in WordPress perché id e nome ci sono già: al backend non serve
       - con WPML attivo, `hreflang` (`wpml_hreflangs`) e selettore di lingua (`icl_ls_languages`) con
         l'indirizzo dell'elemento nell'altra lingua, non quello della pagina madre; senza WPML, niente;
       - la pagina di dettaglio non viene indicizzata come la pagina madre.
-- [ ] Sitemap dei dettagli nella sitemap del core (`wp-sitemap.xml`), con un provider registrato da
+- [x] Sitemap dei dettagli nella sitemap del core (`wp-sitemap.xml`), con un provider registrato da
       `wp_register_sitemap_provider()`: tutte le tracce e tutti i POI con l'indirizzo in ogni lingua,
       presi dalle tabelle `slug → id`, quindi sempre allineati ai dati del backend.
-- [ ] Indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` che risponde con un 301 all'indirizzo
+- [x] Indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` che risponde con un 301 all'indirizzo
       del dettaglio nella lingua della richiesta (404 se l'id non c'è); è il `link_template`
       predefinito della source `tracks`, quindi card, righe e card della mappa della ricerca portano
       al dettaglio senza che il tema scriva niente.
-- [ ] Mappa del dettaglio con lo shortcode esistente `[wmwp_map]` (`tracks` per una traccia, `geojson`
-      per un POI).
-- [ ] README aggiornato nella sezione «Interfaccia pubblica» (impostazioni, filter hook, template,
+- [x] Mappa del dettaglio per i temi, `wmwp_map()`: tracce ciascuna con il suo stile (la principale, le collegate
+      tratteggiate e di sfondo), punti numerati come la legenda del tema, partenza e arrivo della traccia
+      (`ends`: cerchio verde e bandiera a scacchi, solo la partenza in un anello); lo shortcode `[wmwp_map]`
+      resta per i casi semplici. Carta Webmapp e colori dal `config.json` dell'app, letto all'indirizzo del server.
+- [x] Chiave stabile degli elementi (`wmwp_detail_source()`, filtro `wmwp_detail_source`, di base
+      `out_source_feature_id`): riconosce tracce e POI dopo un reset degli id e dà ai doppioni un suffisso stabile.
+- [x] Icone del set IcoMoon dello shard per i temi (`wmwp_icon_svg()`, da `<awsApi>/json/icons.json`).
+- [x] Indirizzo della webapp dello shard per i temi (`wmwp_webapp_url()`, campo «Webapp» nelle impostazioni,
+      dominio proprio dai `redirects` di `environment.ts` o `https://<app ID>.<shard>.webmapp.it/`), anche con il
+      focus su una traccia o un POI.
+- [x] README aggiornato nella sezione «Interfaccia pubblica» (impostazioni, filter hook, template,
       indirizzo per id, sitemap) e voce in CHANGELOG.
-- [ ] Testi del plugin con text domain `wp-package`, italiano e inglese.
-- [ ] Test PHP per slug, doppioni e risoluzione `slug → id` (cartella `tests/`).
+- [x] Testi del plugin con text domain `wp-package`, italiano e inglese.
+- [x] Test PHP per slug, doppioni e risoluzione `slug → id` (cartella `tests/`).
 
 ## Rischi
 
@@ -145,11 +156,14 @@ slug si ricava in WordPress perché id e nome ci sono già: al backend non serve
 Repo `wp-package` (questo):
 
 - `includes/settings.php` — interruttore e select della pagina per tracce e POI.
-- `includes/detail.php` (nuovo) — calcolo delle basi, rewrite e query var, tabella
-  `slug → id`, lettura del JSON, titolo, meta, canonical, `hreflang`, selettore di lingua,
-  provider della sitemap, rendering del template.
+- `includes/detail-base.php`, `detail-index.php`, `detail-route.php`, `detail-render.php`, `detail-seo.php`,
+  `detail-wpml.php`, `class-wmwp-detail-sitemap-provider.php` (nuovi) — basi, indice `slug → id` e chiave stabile,
+  rewrite e redirect, lettura del JSON con cache, meta e canonical, `hreflang` e selettore di lingua, sitemap.
+- `includes/map.php` — `wmwp_map()` e `config.json` all'indirizzo del server; `includes/icons.php` (nuovo) —
+  `wmwp_icon_svg()`; `includes/settings.php` anche per `aws_api`, `wmwp_server_url()` e `wmwp_webapp_url()`.
+- `assets/js/track-map.js`, `assets/js/map-embed.js`, `map/src/` e `assets/dist/` — mappa del dettaglio.
 - `includes/search.php` — `link_template` predefinito con l'indirizzo per id.
-- `templates/track.php`, `templates/poi.php` (nuovi) — template predefiniti.
+- `templates/track.php`, `templates/poi.php`, `templates/detail-unavailable.php` (nuovi) — template predefiniti.
 - `index.php` — caricamento del file nuovo.
 - `languages/` — stringhe nuove.
 - `tests/` — test di slug e risoluzione.

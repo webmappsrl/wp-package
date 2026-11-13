@@ -6,6 +6,9 @@
 > superpowers:executing-plans. I passi usano le caselle (`- [ ]`). **Nessun `git commit`, `git push` o
 > branch senza istruzione esplicita di Rubens**: i commit qui sotto sono istruzioni per lui.
 
+**Stato al 13/11:** Task 1-8 fatti e verificati (suite `tests/php` e `tests/js`); i commit sono stati raggruppati in
+b7d5b9b e 6cdadc5 invece di uno per task. Il Task 9 (lavoro aggiunto dopo il piano) non è ancora committato.
+
 **Obiettivo:** il plugin serve le pagine di dettaglio di EcTrack ed EcPoi di uno shard, senza post
 WordPress, con indirizzi `/<base>/<slug>/` per lingua, SEO, `hreflang` e sitemap, su qualsiasi tema.
 
@@ -81,11 +84,12 @@ di questo repo; la parte di Forestas e le decisioni stanno in
     - `$base`: `function( string $type, ?array $kind, string $lang ): string`.
     - Restituisce `[ 'langs' => string[], 'paths' => [ lang => [ "base/slug" => [ type, id ] ] ], 'urls' => [ type => [ id => [ lang => "base/slug" ] ] ], 'count' => int ]`.
   - Doppioni: dentro la stessa lingua e la stessa base, **tutti** gli elementi con lo stesso slug
-    prendono `-<id>`; gli altri restano senza.
+    prendono `-<chiave stabile>` (`wmwp_detail_source()`, ripulita con `sanitize_title`) o `-<id>` se non
+    ce l'hanno; gli altri restano senza.
   - Lingue: con WPML `apply_filters( 'wpml_active_languages', null )`, altrimenti la lingua del sito
     (`substr( get_locale(), 0, 2 )`).
 
-- [ ] **Passo 1: test che fallisce** — `tests/php/detail-index.php` con questi controlli:
+- [x] **Passo 1: test che fallisce** — `tests/php/detail-index.php` con questi controlli:
   - `wmwp_detail_text( [ 'it' => "\tSalita\t", 'en' => '' ], 'en' ) === 'Salita'`;
   - `wmwp_detail_slug( '— !!', 77 ) === '77'`;
   - due tracce con il nome «Monte Corrasi» sotto la base `sentiero` diventano
@@ -97,10 +101,10 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   - senza nome inglese, `en` vale `sentiero/salita`.
 
   Per i test passa una callable `$base` finta che usa `sanitize_title( wmwp_detail_text( $kind, $lang ) )`.
-- [ ] **Passo 2:** lancia il test e verifica che dia `FAIL` (funzioni non definite).
-- [ ] **Passo 3:** implementa le tre funzioni in `includes/detail-index.php` e il require in `index.php`.
-- [ ] **Passo 4:** rilancia il test e verifica che dia `PASS`.
-- [ ] **Passo 5 (commit, istruzione per Rubens):** `feat(oc:8969): slug e indice dei dettagli`.
+- [x] **Passo 2:** lancia il test e verifica che dia `FAIL` (funzioni non definite).
+- [x] **Passo 3:** implementa le tre funzioni in `includes/detail-index.php` e il require in `index.php`.
+- [x] **Passo 4:** rilancia il test e verifica che dia `PASS`.
+- [x] **Passo 5 (commit, istruzione per Rubens):** `feat(oc:8969): slug e indice dei dettagli`.
 
 ### Task 2: impostazioni delle basi
 
@@ -122,19 +126,19 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   - **altrimenti:** `sanitize_title( wmwp_detail_text( $kind, $lang ) )`, con ripiego `track` per le
     tracce e `poi` per i POI.
 
-- [ ] **Passo 1: test che fallisce**, con questi controlli:
+- [x] **Passo 1: test che fallisce**, con questi controlli:
   - con l'interruttore spento, `wmwp_detail_base( 'track', [ 'it' => 'Sentiero', 'en' => 'Trail' ], 'en' ) === 'trail'`;
   - con `kind = null`, la base è `track` per una traccia e `poi` per un POI;
   - con `pre_option_wmwp_detail_pois_use_page` a `1` e `pre_option_wmwp_detail_pois_page` uguale
     all'id di una pagina creata nel test con slug `punti-di-interesse-test`, la base è
     `punti-di-interesse-test`;
   - alla fine il test cancella la pagina.
-- [ ] **Passo 2:** verifica che dia `FAIL`.
-- [ ] **Passo 3:** implementa `wmwp_detail_base()` e i campi della pagina delle impostazioni. Per ogni
+- [x] **Passo 2:** verifica che dia `FAIL`.
+- [x] **Passo 3:** implementa `wmwp_detail_base()` e i campi della pagina delle impostazioni. Per ogni
   tipo servono la checkbox «Indirizzo sotto una pagina» e `wp_dropdown_pages()`. La select si
   disattiva quando la checkbox è spenta, e si salva con `absint`.
-- [ ] **Passo 4:** verifica che dia `PASS`, e controlla a vista la pagina `/wp-admin/options-general.php?page=wp-package`.
-- [ ] **Passo 5 (commit):** `feat(oc:8969): basi degli indirizzi dei dettagli nelle impostazioni`.
+- [x] **Passo 4:** verifica che dia `PASS`, e controlla a vista la pagina `/wp-admin/options-general.php?page=wp-package`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): basi degli indirizzi dei dettagli nelle impostazioni`.
 
 ### Task 3: lettura dei dati e cache dell'indice
 
@@ -160,19 +164,19 @@ di questo repo; la parte di Forestas e le decisioni stanno in
     `count >= 0.5 * count_precedente`. Altrimenti resta il vecchio e si registra un `error_log`.
 - Filtro `wmwp_detail_items` sugli elementi, prima della costruzione dell'indice.
 
-- [ ] **Passo 1: test che fallisce.** Intercetta le chiamate con `pre_http_request`, che restituisce
+- [x] **Passo 1: test che fallisce.** Intercetta le chiamate con `pre_http_request`, che restituisce
   fixture minime: 3 tracce e 2 POI. Controlli:
   - il primo `wmwp_detail_index()` ha `count === 5`;
   - con lo shard che risponde 500, `wmwp_detail_index( true )` restituisce ancora l'indice da 5;
   - con lo shard che restituisce una sola traccia, l'indice resta da 5;
   - due `wmwp_detail_index( true )` di fila: il secondo non chiama lo shard (contatore delle chiamate
     fermo).
-- [ ] **Passo 2:** verifica che dia `FAIL`.
-- [ ] **Passo 3:** implementa.
-- [ ] **Passo 4:** verifica che dia `PASS`. Poi prova contro lo shard locale:
+- [x] **Passo 2:** verifica che dia `FAIL`.
+- [x] **Passo 3:** implementa.
+- [x] **Passo 4:** verifica che dia `PASS`. Poi prova contro lo shard locale:
   `wp eval 'echo wmwp_detail_index(true)["count"];' --allow-root` deve stampare `1745` (769 tracce +
   976 POI, dati del dev del 12/11).
-- [ ] **Passo 5 (commit):** `feat(oc:8969): indice dei dettagli dalle API dello shard`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): indice dei dettagli dalle API dello shard`.
 
 ### Task 4: rewrite, risoluzione e redirect
 
@@ -204,7 +208,7 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   - con `wmwp_detail` + `wmwp_id`, 301 a `wmwp_detail_url()`, oppure 404;
   - con `wmwp_detail_path`, `wmwp_detail_resolve()` e, se serve, `wp_safe_redirect( …, 301 )`.
 
-- [ ] **Passo 1: test che fallisce**, con l'indice delle fixture del Task 3:
+- [x] **Passo 1: test che fallisce**, con l'indice delle fixture del Task 3:
   - `wmwp_detail_resolve( 'it', 'sentiero/salita' )['status'] === 200`;
   - `wmwp_detail_resolve( 'en', 'sentiero/salita' )` dà 301 verso un URL che finisce con
     `/en/trail/climb/`, se WPML è attivo;
@@ -212,12 +216,12 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   - `wmwp_detail_resolve( 'it', 'sentiero/inventato' )` dà 404;
   - con una pagina vera `sentiero/pagina-vera` creata nel test, `apply_filters( 'request', [ 'wmwp_detail_path' => 'sentiero/pagina-vera' ] )`
     non contiene più `wmwp_detail_path`.
-- [ ] **Passo 2:** verifica che dia `FAIL`.
-- [ ] **Passo 3:** implementa.
-- [ ] **Passo 4:** verifica che dia `PASS`. Poi, in locale:
+- [x] **Passo 2:** verifica che dia `FAIL`.
+- [x] **Passo 3:** implementa.
+- [x] **Passo 4:** verifica che dia `PASS`. Poi, in locale:
   - `curl -sI localhost:8080/?wmwp_detail=track\&wmwp_id=311` dà `301` con `Location: …/cammino/<slug>/`;
   - `curl -sI localhost:8080/cammino/inventato-xyz/` dà `404`.
-- [ ] **Passo 5 (commit):** `feat(oc:8969): indirizzi dei dettagli e redirect`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): indirizzi dei dettagli e redirect`.
 
 ### Task 5: lettura del JSON, controllo nome ↔ slug e template
 
@@ -235,9 +239,10 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   - restituisce un `WP_Error` se lo status non è 200 o il corpo non è una Feature.
 - `wmwp_detail_current(): ?array`: il dettaglio della richiesta, letto una volta sola, con le chiavi
   `type`, `id`, `lang`, `path`, `url`, `urls` (lingua → URL), `feature` (il JSON).
-- Controllo nome ↔ slug: lo slug richiesto deve essere uguale a
+- Controllo dell'elemento: se dettaglio e indice hanno la chiave stabile (`wmwp_detail_source()`)
+  decide quella; altrimenti lo slug richiesto deve essere uguale a
   `wmwp_detail_slug( wmwp_detail_text( feature.properties.name, lang ), id )`, oppure a quello con
-  `-<id>`. Se non torna: ricostruzione dell'indice (se permessa), nuova risoluzione, e se ancora non
+  `-<chiave dell'indice>` o `-<id>`. Se non torna: ricostruzione dell'indice (se permessa), nuova risoluzione, e se ancora non
   torna 404.
 - Al render:
   - `pre_handle_404` restituisce `true` e lo stato è 200;
@@ -251,16 +256,16 @@ di questo repo; la parte di Forestas e le decisioni stanno in
 - Il template regge le chiavi mancanti: il JSON di ripiego del package può non avere i dati dello
   shard (note di wp-forestas, «Rimandato»).
 
-- [ ] **Passo 1: test che fallisce**, con `pre_http_request` che restituisce una Feature finta:
+- [x] **Passo 1: test che fallisce**, con `pre_http_request` che restituisce una Feature finta:
   - una Feature con nome «Salita» per `sentiero/salita` è valida;
   - una Feature con nome «Altro nome» porta a 404 quando la ricostruzione è già stata fatta;
   - con lo shard a 500, il risultato è un `WP_Error` e lo stato è 503.
-- [ ] **Passo 2:** verifica che dia `FAIL`.
-- [ ] **Passo 3:** implementa.
-- [ ] **Passo 4:** verifica che dia `PASS`. Poi, con il tema Twenty Twenty-Five attivo in locale
+- [x] **Passo 2:** verifica che dia `FAIL`.
+- [x] **Passo 3:** implementa.
+- [x] **Passo 4:** verifica che dia `PASS`. Poi, con il tema Twenty Twenty-Five attivo in locale
   (`wp theme activate twentytwentyfive --allow-root`, e alla fine si riattiva `forestas-child`):
   `curl -s localhost:8080/cammino/<slug>/` dà 200 e contiene il nome e la mappa.
-- [ ] **Passo 5 (commit):** `feat(oc:8969): pagina di dettaglio con template sostituibile`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): pagina di dettaglio con template sostituibile`.
 
 ### Task 6: SEO senza dipendenze
 
@@ -288,15 +293,15 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   - **Yoast (`WPSEO_VERSION`):** `wpseo_frontend_presenters` restituisce `[]` sui dettagli;
   - **Rank Math (`RANK_MATH_VERSION`):** `rank_math/head` rimosso sui dettagli.
 
-- [ ] **Passo 1: test che fallisce.** `wmwp_detail_meta()` su una Feature finta: la descrizione è
+- [x] **Passo 1: test che fallisce.** `wmwp_detail_meta()` su una Feature finta: la descrizione è
   tagliata a 160 caratteri senza HTML, e `url` è uguale a `wmwp_detail_url()`.
-- [ ] **Passo 2:** verifica che dia `FAIL`.
-- [ ] **Passo 3:** implementa.
-- [ ] **Passo 4:** verifica che dia `PASS`. Poi controlla il sorgente HTML della pagina servita, sia con
+- [x] **Passo 2:** verifica che dia `FAIL`.
+- [x] **Passo 3:** implementa.
+- [x] **Passo 4:** verifica che dia `PASS`. Poi controlla il sorgente HTML della pagina servita, sia con
   Impreza (forestas-child) sia con Twenty Twenty-Five. Il comando
   `curl -s localhost:8080/cammino/<slug>/ | grep -cE 'rel="canonical"|name="description"|property="og:title"'`
   deve dare `3`: un tag per tipo, nessun doppione.
-- [ ] **Passo 5 (commit):** `feat(oc:8969): SEO delle pagine di dettaglio`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): SEO delle pagine di dettaglio`.
 
 ### Task 7: WPML e sitemap
 
@@ -315,16 +320,16 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   sottotipi `track` e `poi`. `get_url_list( $page, $subtype )` restituisce `[ 'loc' => URL ]` per ogni
   elemento e lingua dell'indice, 2000 per pagina. La registra `wp_register_sitemap_provider()` su `init`.
 
-- [ ] **Passo 1: test che fallisce.** Con l'indice delle fixture: il provider restituisce `count` uguale
+- [x] **Passo 1: test che fallisce.** Con l'indice delle fixture: il provider restituisce `count` uguale
   a (tracce × lingue) per il sottotipo `track`, e ogni `loc` inizia con `home_url()`.
-- [ ] **Passo 2:** verifica che dia `FAIL`.
-- [ ] **Passo 3:** implementa.
-- [ ] **Passo 4:** verifica che dia `PASS`. Poi, in locale, con `wp option update blog_public 1`
+- [x] **Passo 2:** verifica che dia `FAIL`.
+- [x] **Passo 3:** implementa.
+- [x] **Passo 4:** verifica che dia `PASS`. Poi, in locale, con `wp option update blog_public 1`
   (e alla fine si rimette `0`):
   - `curl -s localhost:8080/wp-sitemap.xml` elenca `wmwpdetail-track` e `wmwpdetail-poi`;
   - il sorgente di `/cammino/<slug>/` ha due `hreflang` con URL diversi;
   - il selettore di lingua porta a `/en/walk/<slug-en>/`.
-- [ ] **Passo 5 (commit):** `feat(oc:8969): hreflang, selettore di lingua e sitemap dei dettagli`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): hreflang, selettore di lingua e sitemap dei dettagli`.
 
 ### Task 8: link della ricerca, documentazione, traduzioni
 
@@ -341,17 +346,31 @@ di questo repo; la parte di Forestas e le decisioni stanno in
   Con WPML in modalità directory la lingua è nel percorso, quindi l'id redirect del Task 4 risponde
   nella lingua giusta. `{id}` resta letterale: `add_query_arg` non lo codifica, e il test lo controlla.
 
-- [ ] **Passo 1: test JS che fallisce** in `tests/js/source-tracks.test.js`: con
+- [x] **Passo 1: test JS che fallisce** in `tests/js/source-tracks.test.js`: con
   `link_template = 'http://x/?wmwp_detail=track&wmwp_id={id}'`, la card dell'hit 473 ha
   `url === 'http://x/?wmwp_detail=track&wmwp_id=473'`.
-- [ ] **Passo 2:** `node --test tests/js/source-tracks.test.js` deve fallire solo se il JS non sostituisce.
+- [x] **Passo 2:** `node --test tests/js/source-tracks.test.js` deve fallire solo se il JS non sostituisce.
   Se passa già, il test resta come protezione e si va avanti.
-- [ ] **Passo 3:** imposta il predefinito in `includes/search.php`. Poi la documentazione:
+- [x] **Passo 3:** imposta il predefinito in `includes/search.php`. Poi la documentazione:
   - README, sezione «Interfaccia pubblica»: le opzioni, i filtri `wmwp_detail_items`, `wmwp_detail_meta`
     e `wmwp_detail_print_meta`, i template `track.php`, `poi.php` e `detail-unavailable.php`,
     l'indirizzo per id, la sitemap, il requisito della rewrite;
   - CHANGELOG `0.2.0`;
   - traduzioni rigenerate **su una copia** del plugin.
-- [ ] **Passo 4:** in locale, la ricerca `/cerca-nel-sito/` (o la pagina della ricerca) ha i link delle
+- [x] **Passo 4:** in locale, la ricerca `/cerca-nel-sito/` (o la pagina della ricerca) ha i link delle
   righe che portano al dettaglio. Si prova un clic con il browser, sia in italiano sia in inglese.
-- [ ] **Passo 5 (commit):** `feat(oc:8969): link della ricerca ai dettagli, README e traduzioni`.
+- [x] **Passo 5 (commit):** `feat(oc:8969): link della ricerca ai dettagli, README e traduzioni`.
+
+### Task 9: lavoro aggiunto dopo il piano (Rubens, 12-13/11)
+
+Fatto con test scritti prima (TDD) e verificato in locale con il child di Forestas.
+
+- [x] JSON della traccia dal file su AWS (o MinIO su dev e UAT) con richiesta condizionale, cache di 60 s:
+      `tests/php/detail-aws.php`, `detail-cache.php`.
+- [x] `wmwp_icon_svg()`: `tests/php/icons.php`.
+- [x] `wmwp_map()` con tracce di stili diversi, punti numerati, partenza e arrivo (`ends`): `tests/php/map-detail.php`,
+      `tests/js/track-map.test.js`; build della mappa con Node 20.
+- [x] `wmwp_webapp_url()` e campo «Webapp»: `tests/php/webapp-url.php`; traduzioni.
+- [x] Chiave stabile `wmwp_detail_source()`: controllo dell'elemento e suffisso dei doppioni, `tests/php/detail-index.php`
+      e `detail-render.php`.
+- [ ] **Commit (istruzione per Rubens):** `feat(oc:8969): …` dei file cambiati dopo 6cdadc5, nello stesso branch.

@@ -1,8 +1,8 @@
 <?php
 /**
  * Test (oc:8969): slug e indice dei dettagli. Il nome nella lingua con ripiego sull'italiano, lo slug che non resta
- * mai vuoto, i doppioni con `-<id>` sui soli elementi in conflitto (nella stessa base e lingua) e gli indirizzi per
- * lingua. Si lancia con: wp eval-file tests/php/detail-index.php
+ * mai vuoto, i doppioni con `-<id>` (o `-<fonte>`, la chiave stabile) sui soli elementi in conflitto (nella stessa
+ * base e lingua) e gli indirizzi per lingua. Si lancia con: wp eval-file tests/php/detail-index.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1.
  */
 
@@ -84,6 +84,36 @@ $check( 3 === count( array_unique( $percorsi ) ), 'tre percorsi diversi: ' . imp
 $check( 'poi/foo-5' === $coll['urls']['poi'][9]['it'], 'lo slug naturale resta a chi ce l\'ha' );
 $check( 3 === count( $coll['paths']['it'] ), 'ogni percorso porta a un elemento solo' );
 $check( [ 'track' => 0, 'poi' => 3 ] === ( $coll['counts'] ?? null ), 'conteggi per tipo' );
+
+// 6. Chiave stabile della fonte: `wmwp_detail_source()` legge `out_source_feature_id`, un tema la cambia con il filtro
+// `wmwp_detail_source`. I doppioni con la fonte prendono `-<fonte>` invece di `-<id>`: l'indirizzo non cambia quando
+// lo shard rinumera gli id (reset notturno, reimport)
+$check( 'D-77' === wmwp_detail_source( 'poi', [ 'out_source_feature_id' => 'D-77' ] ), 'fonte da out_source_feature_id' );
+$check( '' === wmwp_detail_source( 'track', [ 'out_source_feature_id' => [ 'x' ] ] ) && '' === wmwp_detail_source( 'track', [] ), 'fonte assente o non scalare → vuota' );
+$filtro = function ( $source, $type, $props ) {
+	return isset( $props['nid'] ) ? (string) $props['nid'] : $source;
+};
+add_filter( 'wmwp_detail_source', $filtro, 20, 3 );
+$check( '4076' === wmwp_detail_source( 'track', [ 'nid' => 4076 ] ), 'filtro wmwp_detail_source' );
+remove_filter( 'wmwp_detail_source', $filtro, 20 );
+
+$monte = function ( array $ids ) use ( $base, $sentiero ) {
+	return wmwp_detail_build_index(
+		[
+			[ 'type' => 'track', 'id' => $ids[0], 'names' => [ 'it' => 'Monte' ], 'kind' => $sentiero, 'source' => '4076' ],
+			[ 'type' => 'track', 'id' => $ids[1], 'names' => [ 'it' => 'Monte' ], 'kind' => $sentiero, 'source' => 'N 12/B' ],
+			[ 'type' => 'track', 'id' => $ids[2], 'names' => [ 'it' => 'Monte' ], 'kind' => $sentiero ],
+		],
+		$base,
+		[ 'it' ]
+	);
+};
+$prima = $monte( [ 11, 12, 13 ] );
+$check( 'sentiero/monte-4076' === ( $prima['urls']['track'][11]['it'] ?? null ), 'doppione con la fonte: -<fonte>' );
+$check( 'sentiero/monte-n-12-b' === ( $prima['urls']['track'][12]['it'] ?? null ), 'fonte ripulita per l\'indirizzo' );
+$check( 'sentiero/monte-13' === ( $prima['urls']['track'][13]['it'] ?? null ), 'doppione senza fonte: -<id>' );
+$dopo = $monte( [ 211, 212, 213 ] );
+$check( 'sentiero/monte-4076' === ( $dopo['urls']['track'][211]['it'] ?? null ) && 'sentiero/monte-n-12-b' === ( $dopo['urls']['track'][212]['it'] ?? null ), 'stesso indirizzo dopo la rinumerazione degli id' );
 
 if ( $failures ) {
 	echo 'FAIL: ' . implode( '; ', $failures ) . "\n";

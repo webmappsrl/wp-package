@@ -23,6 +23,18 @@
 	background: #f3f4f6;
 }
 
+/* Pulsanti della mappa (zoom, schermo intero, rotazione) da 32px: quelli di OpenLayers sono di 22px, sotto i 24px minimi
+   di un bersaglio (WCAG 2.5.8) e scomodi col dito (oc:8969) */
+.wmwp-map .ol-control button {
+	width: 32px;
+	height: 32px;
+	font-size: 20px;
+	line-height: 1;
+}
+.wmwp-map .ol-zoom .ol-zoom-out {
+	margin-top: 2px;
+}
+
 /* Icona del pulsante dello schermo intero (il testo predefinito di OpenLayers è una lettera) */
 .wmwp-map .ol-full-screen button svg {
 	display: block;

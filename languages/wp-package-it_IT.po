@@ -1,23 +1,22 @@
-# Copyright (C) 2026 Webmapp
-# This file is distributed under the GPL2.
 msgid ""
 msgstr ""
 "Project-Id-Version: WP Package 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-package\n"
-"POT-Creation-Date: 2026-11-10T15:18:00+00:00\n"
-"PO-Revision-Date: 2026-11-09 17:00+0000\n"
 "Last-Translator: Webmapp\n"
 "Language-Team: Italiano\n"
-"Language: it_IT\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-11-10T15:18:00+00:00\n"
+"PO-Revision-Date: 2026-11-09 17:00+0000\n"
+"Language: it_IT\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-package\n"
 
 #. Plugin Name of the plugin
-#: index.php includes/settings.php:146
+#: index.php
+#: includes/settings.php:272
 msgid "WP Package"
 msgstr ""
 
@@ -25,15 +24,6 @@ msgstr ""
 #: index.php
 msgid "https://github.com/webmappsrl/wp-package"
 msgstr ""
-
-#. Description of the plugin
-#: index.php
-msgid ""
-"Unified site search for Webmapp shards: tracks from the shard Elasticsearch "
-"API and sources added by the theme."
-msgstr ""
-"Ricerca unica del sito per gli shard Webmapp: percorsi dall'API "
-"Elasticsearch dello shard e source aggiunte dal tema."
 
 #. Author of the plugin
 #: index.php
@@ -45,29 +35,22 @@ msgstr ""
 msgid "https://webmapp.it"
 msgstr ""
 
-#: includes/map.php:199 templates/search.php:47
+#: includes/map.php:212
+#: templates/search.php:47
 msgid "Map"
 msgstr "Mappa"
 
 #. translators: 1: parameter name chosen by the theme, 2: parameter key, 3: default name used instead
 #: includes/search.php:54
 #, php-format
-msgid ""
-"«%1$s» cannot be the name of the «%2$s» parameter (empty, already used, or a "
-"WordPress query var): «%3$s» is used instead."
-msgstr ""
-"«%1$s» non può essere il nome del parametro «%2$s» (vuoto, già usato o query "
-"var di WordPress): si usa «%3$s»."
+msgid "«%1$s» cannot be the name of the «%2$s» parameter (empty, already used, or a WordPress query var): «%3$s» is used instead."
+msgstr "«%1$s» non può essere il nome del parametro «%2$s» (vuoto, già usato o query var di WordPress): si usa «%3$s»."
 
 #. translators: 1: filter key chosen by the theme, 2: key used instead
 #: includes/search.php:79
 #, php-format
-msgid ""
-"The filter key «%1$s» is a WordPress query var or a search parameter: «%2$s» "
-"is used instead."
-msgstr ""
-"La chiave del filtro «%1$s» è una query var di WordPress o un parametro "
-"della ricerca: si usa «%2$s»."
+msgid "The filter key «%1$s» is a WordPress query var or a search parameter: «%2$s» is used instead."
+msgstr "La chiave del filtro «%1$s» è una query var di WordPress o un parametro della ricerca: si usa «%2$s»."
 
 #: includes/search.php:102
 msgid "Trails"
@@ -90,42 +73,43 @@ msgid "Search trails"
 msgstr "Cerca un percorso"
 
 #. translators: %s: number of selected trails, singular
-#: includes/search.php:124
+#: includes/search.php:125
 #, php-format
 msgid "%s trail selected"
 msgstr "%s percorso selezionato"
 
 #. translators: %s: number of selected trails, plural
-#: includes/search.php:126
+#: includes/search.php:127
 #, php-format
 msgid "%s trails selected"
 msgstr "%s percorsi selezionati"
 
-#: includes/search.php:128
+#: includes/search.php:129
 msgid "Selected trails"
 msgstr "Percorsi selezionati"
 
-#: includes/settings.php:151
+#: includes/settings.php:277
 msgid "Shard"
 msgstr ""
 
-#: includes/settings.php:154
+#: includes/settings.php:280
+#: includes/settings.php:336
 msgid "— Select —"
 msgstr "— Scegli —"
 
-#: includes/settings.php:160
+#: includes/settings.php:286
 msgid "The shard list could not be loaded from wm-types."
 msgstr "Non è stato possibile leggere l'elenco degli shard da wm-types."
 
-#: includes/settings.php:165
+#: includes/settings.php:291
 msgid "App ID"
 msgstr ""
 
-#: includes/settings.php:169
+#: includes/settings.php:295
 msgid "Elasticsearch API"
 msgstr "API Elasticsearch"
 
-#: includes/settings.php:170
+#: includes/settings.php:296
 msgid "not configured"
 msgstr "non configurata"
 
@@ -133,7 +117,8 @@ msgstr "non configurata"
 msgid "Results by type"
 msgstr "Risultati per tipo"
 
-#: templates/search.php:20 templates/search.php:37
+#: templates/search.php:20
+#: templates/search.php:37
 msgid "Filters"
 msgstr "Filtri"
 
@@ -141,11 +126,13 @@ msgstr "Filtri"
 msgid "Show results"
 msgstr "Mostra i risultati"
 
-#: templates/search.php:31 templates/search.php:82
+#: templates/search.php:31
+#: templates/search.php:82
 msgid "Search the site"
 msgstr "Cerca nel sito"
 
-#: templates/search.php:34 templates/search.php:87
+#: templates/search.php:34
+#: templates/search.php:87
 msgid "Search"
 msgstr "Cerca"
 
@@ -173,6 +160,7 @@ msgstr "Selezione"
 msgid "Deselect all"
 msgstr "Deseleziona tutto"
 
+#: includes/settings.php:311
 #: templates/search.php:66
 msgid "Tracks"
 msgstr "Tracce"
@@ -181,27 +169,33 @@ msgstr "Tracce"
 msgid "Track format"
 msgstr "Formato delle tracce"
 
-#: assets/js/map-embed.js:15 assets/js/search.js:912
+#: assets/js/map-embed.js:16
+#: assets/js/search.js:917
 msgid "The map is not available right now. Please try again later."
 msgstr "La mappa non è disponibile in questo momento. Riprova più tardi."
 
-#: assets/js/map-embed.js:33 assets/js/search.js:871
+#: assets/js/map-embed.js:34
+#: assets/js/search.js:876
 msgid "Zoom in on the map"
 msgstr "Ingrandisci la mappa"
 
-#: assets/js/map-embed.js:34 assets/js/search.js:872
+#: assets/js/map-embed.js:35
+#: assets/js/search.js:877
 msgid "Zoom out of the map"
 msgstr "Riduci la mappa"
 
-#: assets/js/map-embed.js:35 assets/js/search.js:873
+#: assets/js/map-embed.js:36
+#: assets/js/search.js:878
 msgid "Show the map full screen"
 msgstr "Mappa a schermo intero"
 
-#: assets/js/map-embed.js:36 assets/js/search.js:874
+#: assets/js/map-embed.js:37
+#: assets/js/search.js:879
 msgid "Exit full screen"
 msgstr "Esci dallo schermo intero"
 
-#: assets/js/map-embed.js:37 assets/js/search.js:876
+#: assets/js/map-embed.js:38
+#: assets/js/search.js:881
 msgid "Map: arrow keys to move it, + and − to zoom in and out"
 msgstr "Mappa: frecce per spostarla, + e − per ingrandire e ridurre"
 
@@ -211,182 +205,215 @@ msgstr "Tutti"
 
 #. translators: %s: code and name of the result (e.g. C 104 A Andala Segura)
 #: assets/js/search.js:406
+#, js-format
 msgid "Select %s"
 msgstr "Seleziona %s"
 
 #. translators: %s: number and type of results (e.g. 1 trail)
 #: assets/js/search.js:512
+#, js-format
 msgid "Select %s in this search"
 msgstr "Seleziona %s della ricerca"
 
 #. translators: %s: number and type of results (e.g. 42 trails)
 #: assets/js/search.js:515
+#, js-format
 msgid "Select all %s in this search"
 msgstr "Seleziona tutti i %s della ricerca"
 
 #. translators: 1: number and type of results (e.g. 3 trails), 2: file format (e.g. GPX)
-#: assets/js/search.js:558
+#: assets/js/search.js:563
+#, js-format
 msgid "Download %1$s as %2$s"
 msgstr "Scarica %1$s in %2$s"
 
 #. translators: 1: results ready, 2: number and type of results (e.g. 769 trails)
-#: assets/js/search.js:589
+#: assets/js/search.js:594
+#, js-format
 msgid "Preparing the file: %1$s of %2$s"
 msgstr "Preparo il file: %1$s di %2$s"
 
-#: assets/js/search.js:598
+#: assets/js/search.js:603
 msgid "None of the selected results has a route."
 msgstr "Nessuno dei risultati scelti ha un tracciato."
 
 #. translators: 1: number and type of results (e.g. 3 trails), 2: file format (e.g. GPX)
-#: assets/js/search.js:603
+#: assets/js/search.js:608
+#, js-format
 msgid "File ready: %1$s as %2$s."
 msgstr "File pronto: %1$s in %2$s."
 
 #. translators: %s: number and type of results (e.g. 2 trails)
-#: assets/js/search.js:606
+#: assets/js/search.js:611
+#, js-format
 msgid "Not included because they have no route: %s."
 msgstr "Non inclusi perché senza tracciato: %s."
 
-#: assets/js/search.js:612
+#: assets/js/search.js:617
 msgid "The download did not work. Please try again."
 msgstr "Lo scarico non è riuscito. Riprova."
 
-#: assets/js/search.js:647 assets/js/search.js:1182
+#: assets/js/search.js:652
+#: assets/js/search.js:1187
 msgid "Remove all filters"
 msgstr "Togli tutti i filtri"
 
-#: assets/js/search.js:656
+#: assets/js/search.js:661
 msgid "No results."
 msgstr "Nessun risultato."
 
 #. translators: %s: the searched text
-#: assets/js/search.js:659
+#: assets/js/search.js:664
+#, js-format
 msgid "No results for “%s”. Check the spelling or try a shorter text."
-msgstr ""
-"Nessun risultato per «%s». Controlla come è scritto o prova con un testo più "
-"breve."
+msgstr "Nessun risultato per «%s». Controlla come è scritto o prova con un testo più breve."
 
 #. translators: 1: result type (e.g. Trails), 2: number of results
-#: assets/js/search.js:669
+#: assets/js/search.js:674
+#, js-format
 msgid "%1$s: %2$s"
 msgstr "%1$s: %2$s"
 
-#: assets/js/search.js:672 assets/js/search.js:728 assets/js/search.js:964
-#: assets/js/search.js:968
+#: assets/js/search.js:677
+#: assets/js/search.js:733
+#: assets/js/search.js:969
+#: assets/js/search.js:973
 msgid "These results are not available right now. Please try again later."
-msgstr ""
-"Questi risultati non sono disponibili in questo momento. Riprova più tardi."
+msgstr "Questi risultati non sono disponibili in questo momento. Riprova più tardi."
 
 #. translators: %s: number and type of results (e.g. 42 trails)
-#: assets/js/search.js:681
+#: assets/js/search.js:686
+#, js-format
 msgid "See all: %s"
 msgstr "Vedi tutti: %s"
 
-#: assets/js/search.js:807
+#: assets/js/search.js:812
 msgid "Remove from selection"
 msgstr "Togli dalla selezione"
 
-#: assets/js/search.js:807
+#: assets/js/search.js:812
 msgid "Add to selection"
 msgstr "Aggiungi alla selezione"
 
 #. translators: 1: routes loaded so far, 2: routes to load
-#: assets/js/search.js:854
+#: assets/js/search.js:859
+#, js-format
 msgid "Loading the routes: %1$s of %2$s"
 msgstr "Carico i tracciati: %1$s di %2$s"
 
-#: assets/js/search.js:875
+#: assets/js/search.js:880
 msgid "Close"
 msgstr "Chiudi"
 
-#: assets/js/search.js:893
+#: assets/js/search.js:898
 msgid "Framed on the area that contains all the results"
 msgstr "Inquadratura sul riquadro che contiene tutti i risultati"
 
 #. translators: %s: selected results, e.g. 3 trails selected
-#: assets/js/search.js:897
+#: assets/js/search.js:902
+#, js-format
 msgid "%s. The other results are dashed."
 msgstr "%s. Gli altri risultati sono tratteggiati."
 
 #. translators: %s: selected results, e.g. 3 trails selected
-#: assets/js/search.js:900
+#: assets/js/search.js:905
+#, js-format
 msgid "Framed on the selection: %s. The other results are dashed."
-msgstr ""
-"Inquadratura sulla selezione: %s. Gli altri risultati sono tratteggiati."
+msgstr "Inquadratura sulla selezione: %s. Gli altri risultati sono tratteggiati."
 
 #. translators: %s: number of results, e.g. 3 trails
-#: assets/js/search.js:904
+#: assets/js/search.js:909
+#, js-format
 msgid "Not on the map because they have no route: %s."
 msgstr "Non sono sulla mappa perché senza tracciato: %s."
 
-#: assets/js/search.js:1073
+#: assets/js/search.js:1078
 msgid "Show less"
 msgstr "Mostra meno"
 
-#: assets/js/search.js:1073
+#: assets/js/search.js:1078
 msgid "Show more"
 msgstr "Mostra altro"
 
-#: assets/js/search.js:1118
+#: assets/js/search.js:1123
 msgid "Previous page"
 msgstr "Pagina precedente"
 
 #. translators: %s: page number
-#: assets/js/search.js:1124
+#: assets/js/search.js:1129
+#, js-format
 msgid "Page %s"
 msgstr "Pagina %s"
 
-#: assets/js/search.js:1127
+#: assets/js/search.js:1132
 msgid "Next page"
 msgstr "Pagina successiva"
 
-#: assets/js/search.js:1154
+#: assets/js/search.js:1159
 msgid "Active filters:"
 msgstr "Filtri attivi:"
 
 #. translators: 1: filter name (e.g. Activity), 2: filter value (e.g. Mountain bike)
-#: assets/js/search.js:1164
+#: assets/js/search.js:1169
+#, js-format
 msgid "Remove filter %1$s: %2$s"
 msgstr "Togli il filtro %1$s: %2$s"
 
 #. translators: %s: total length, e.g. 179.5 km
 #: assets/js/source-tracks.js:222
+#, js-format
 msgid "%s in total"
 msgstr "%s complessivi"
 
-#: includes (oc:8969)
+#: includes/settings.php:306
 msgid "Detail pages"
 msgstr "Pagine di dettaglio"
 
-#: includes (oc:8969)
+#: includes/settings.php:307
 msgid "By default the address of a detail page starts with its type: the route type of a track (e.g. /trail/…, /track/ without one) and the POI type of a point of interest (/poi/ without one). Under a page, every address starts with the path of that page."
 msgstr "Di norma l'indirizzo di una pagina di dettaglio inizia con il suo tipo: il tipo di percorso di una traccia (es. /sentiero/…, /track/ se non ce l'ha) e il tipo di un punto di interesse (/poi/ se non ce l'ha). Sotto una pagina, ogni indirizzo inizia con il percorso di quella pagina."
 
-#: includes (oc:8969)
+#: includes/settings.php:312
 msgid "Points of interest"
 msgstr "Punti di interesse"
 
-#: includes (oc:8969)
+#: includes/settings.php:326
 msgid "Address under a page"
 msgstr "Indirizzo sotto una pagina"
 
-#: includes (oc:8969)
+#: includes/settings.php:329
 msgid "Page"
 msgstr "Pagina"
 
-#: includes (oc:8969)
+#: includes/settings.php:343
 msgid "Set by the theme: changes here have no effect."
 msgstr "Impostato dal tema: le modifiche qui non hanno effetto."
 
-#: includes (oc:8969)
+#: templates/detail-unavailable.php:15
 msgid "Page temporarily unavailable"
 msgstr "Pagina momentaneamente non disponibile"
 
-#: includes (oc:8969)
+#: templates/detail-unavailable.php:16
 msgid "The data of this page cannot be loaded right now. Please try again in a few minutes."
 msgstr "In questo momento non è possibile caricare i dati di questa pagina. Riprova tra qualche minuto."
 
 #. Description of the plugin
+#: index.php
 msgid "Unified site search and detail pages for Webmapp shards: tracks and POIs from the shard APIs, sources added by the theme."
 msgstr "Ricerca unica del sito e pagine di dettaglio per gli shard Webmapp: tracce e POI dalle API dello shard, source aggiunte dal tema."
+
+#: includes/settings.php:299
+msgid "Webapp"
+msgstr "Webapp"
+
+#: includes/settings.php:302
+msgid "Leave empty to use the webapp of the shard and app above (a custom domain from environment.ts, or https://<app ID>.<shard>.webmapp.it/)."
+msgstr "Lascia vuoto per usare la webapp dello shard e dell'app qui sopra (un dominio proprio da environment.ts, oppure https://<ID app>.<shard>.webmapp.it/)."
+
+#: includes/map.php:265
+msgid "Start"
+msgstr "Partenza"
+
+#: includes/map.php:266
+msgid "Finish"
+msgstr "Arrivo"

@@ -191,6 +191,17 @@ function wmwp_render_map( $atts ): string {
 	} else {
 		return '';
 	}
+	return wmwp_map_embed( $options, (string) $atts['label'] );
+}
+add_shortcode( WMWP_MAP_SHORTCODE, 'wmwp_render_map' );
+
+/**
+ * Contenitore della mappa con le opzioni per assets/js/map-embed.js (carta di base e colori dei layer dell'app
+ * aggiunti qui), e gli script accodati. Lo usano lo shortcode e `wmwp_map()`.
+ *
+ * @param array<string, mixed> $options Opzioni della mappa.
+ */
+function wmwp_map_embed( array $options, string $label ): string {
 	$tiles = wmwp_map_tiles();
 	if ( $tiles ) {
 		$options['tiles'] = $tiles;
@@ -198,11 +209,95 @@ function wmwp_render_map( $atts ): string {
 	$options['layer_colors'] = wmwp_map_layer_colors();
 	wp_enqueue_style( 'wmwp-map' );
 	wp_enqueue_script( 'wmwp-map-embed' );
-	$label = '' !== trim( (string) $atts['label'] ) ? (string) $atts['label'] : __( 'Map', 'wp-package' );
+	$label = '' !== trim( $label ) ? $label : __( 'Map', 'wp-package' );
 	return sprintf(
 		'<div class="wmwp-map-embed" role="region" aria-label="%1$s" data-wmwp-map="%2$s"></div>',
 		esc_attr( $label ),
 		esc_attr( (string) wp_json_encode( $options ) )
 	);
 }
-add_shortcode( WMWP_MAP_SHORTCODE, 'wmwp_render_map' );
+
+/** Colore CSS accettato per la mappa: esadecimale o rgb()/rgba(), altrimenti ''. */
+function wmwp_map_color( $color ): string {
+	$color = is_string( $color ) ? trim( $color ) : '';
+	return preg_match( '/^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(,\s*[\d.]+\s*)?\))$/i', $color ) ? $color : '';
+}
+
+/**
+ * Mappa del dettaglio per i temi (oc:8969): tracce dello shard ciascuna con il suo stile e punti, per esempio il percorso
+ * della scheda, i percorsi collegati tratteggiati e i punti di interesse numerati. Le geometrie delle tracce si leggono
+ * da `api/ec/track/multiple`; i punti arrivano già con le coordinate (dal JSON del dettaglio). '' senza tracce né punti.
+ *
+ * @param array{
+ *   tracks?: list<array{id: int, color?: string, width?: float, dash?: list<float>, context?: bool, label?: string, tooltip?: string, url?: string, ends?: bool|array{start?: string, end?: string}}>,
+ *   points?: list<array{coordinates: array{0: float, 1: float}, color?: string, number?: int|string, tooltip?: string, url?: string}>,
+ *   height?: int,
+ *   label?: string
+ * } $args Tracce e punti; `context` = traccia di sfondo, disegnata sotto e fuori dall'inquadratura; `url` = la scheda che
+ *   si apre al clic; `ends` = partenza (cerchio verde) e arrivo (bandiera a scacchi) della traccia, con le etichette
+ *   del tooltip, come la mappa di GeoHub del sito attuale; in un anello solo la partenza; `number` = numero scritto sul
+ *   punto, come nella legenda del tema.
+ */
+function wmwp_map( array $args ): string {
+	$tracks = [];
+	foreach ( (array) ( $args['tracks'] ?? [] ) as $track ) {
+		$id = is_array( $track ) ? absint( $track['id'] ?? 0 ) : absint( $track );
+		if ( $id <= 0 ) {
+			continue;
+		}
+		$track    = is_array( $track ) ? $track : [];
+		$dash     = array_values( array_filter( array_map( 'floatval', (array) ( $track['dash'] ?? [] ) ), fn( $n ) => $n > 0 ) );
+		$tracks[] = [
+			'id'      => $id,
+			'color'   => wmwp_map_color( $track['color'] ?? '' ),
+			'width'   => isset( $track['width'] ) && is_numeric( $track['width'] ) && $track['width'] > 0 ? (float) $track['width'] : 0,
+			'dash'    => $dash,
+			'context' => ! empty( $track['context'] ),
+			'label'   => sanitize_text_field( (string) ( $track['label'] ?? '' ) ),
+			'tooltip' => sanitize_text_field( (string) ( $track['tooltip'] ?? '' ) ),
+			'url'     => wmwp_map_url( $track['url'] ?? '' ),
+		];
+		// Partenza e arrivo sulla traccia (cerchio verde e bandiera a scacchi, come la mappa di GeoHub): etichette del
+		// tema per tooltip e legenda, o quelle del plugin
+		if ( ! empty( $track['ends'] ) ) {
+			$ends = is_array( $track['ends'] ) ? $track['ends'] : [];
+			$tracks[ count( $tracks ) - 1 ]['ends'] = [
+				'start' => sanitize_text_field( (string) ( $ends['start'] ?? __( 'Start', 'wp-package' ) ) ),
+				'end'   => sanitize_text_field( (string) ( $ends['end'] ?? __( 'Finish', 'wp-package' ) ) ),
+			];
+		}
+	}
+	$points = [];
+	foreach ( (array) ( $args['points'] ?? [] ) as $point ) {
+		$coordinates = is_array( $point ) ? (array) ( $point['coordinates'] ?? [] ) : [];
+		if ( ! isset( $coordinates[0], $coordinates[1] ) || ! is_numeric( $coordinates[0] ) || ! is_numeric( $coordinates[1] ) ) {
+			continue;
+		}
+		$points[] = [
+			'coordinates' => [ (float) $coordinates[0], (float) $coordinates[1] ],
+			'color'       => wmwp_map_color( $point['color'] ?? '' ),
+			'number'      => sanitize_text_field( (string) ( $point['number'] ?? '' ) ),
+			'tooltip'     => sanitize_text_field( (string) ( $point['tooltip'] ?? '' ) ),
+			'url'         => wmwp_map_url( $point['url'] ?? '' ),
+		];
+	}
+	if ( ! $tracks && ! $points ) {
+		return '';
+	}
+	$options = [
+		'height'       => max( 200, absint( $args['height'] ?? 420 ) ),
+		'tracks'       => array_column( $tracks, 'id' ),
+		'download_url' => wmwp_tracks_download_url(),
+		'detail'       => [
+			'tracks' => $tracks,
+			'points' => $points,
+		],
+	];
+	return wmwp_map_embed( $options, (string) ( $args['label'] ?? '' ) );
+}
+
+/** Indirizzo http(s) per il clic su una feature della mappa, altrimenti ''. */
+function wmwp_map_url( $url ): string {
+	$url = is_string( $url ) ? trim( $url ) : '';
+	return '' !== $url && in_array( wp_parse_url( $url, PHP_URL_SCHEME ), [ 'http', 'https' ], true ) ? esc_url_raw( $url ) : '';
+}

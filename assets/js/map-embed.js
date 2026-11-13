@@ -1,6 +1,7 @@
 /*
  * Shortcode [wmwp_map] (oc:8952): monta la mappa di wp-package (window.wmWpMap) su ogni elemento con
- * `data-wmwp-map`, scritto da includes/map.php: { height, tracks: [id], download_url } oppure { height, geojson }.
+ * `data-wmwp-map`, scritto da includes/map.php: { height, tracks: [id], download_url } oppure { height, geojson }, o
+ * per la mappa del dettaglio (wmwp_map()) { height, tracks, download_url, detail: { tracks, points } }.
  * Le tracce si leggono da `api/ec/track/multiple` con wmWpTrackApi, come nella ricerca.
  */
 (function () {
@@ -36,6 +37,29 @@
       exitFullScreen: __('Exit full screen', 'wp-package'),
       keyboard: __('Map: arrow keys to move it, + and − to zoom in and out', 'wp-package')
     };
+    var base = { height: height, fullScreen: true, labels: labels, tiles: options.tiles || null };
+    // Mappa del dettaglio (wmwp_map(), oc:8969): tracce ciascuna col suo stile e punti numerati
+    if (options.detail && window.wmWpTrackMap) {
+      var show = function (features) {
+        var geojson = window.wmWpTrackMap.detail(features, options.detail);
+        if (!geojson.features.length) {
+          fail(element);
+          return;
+        }
+        window.wmWpMap.mount(element, Object.assign({ geojson: geojson }, base));
+      };
+      if (options.tracks && options.tracks.length && options.download_url && window.wmWpTrackApi) {
+        window.wmWpTrackApi.create(options.download_url).features(options.tracks).then(function (result) {
+          show(result.features);
+        }, function () {
+          // Senza tracce restano i punti, se ci sono
+          show([]);
+        });
+      } else {
+        show([]);
+      }
+      return;
+    }
     if (options.tracks && options.tracks.length && options.download_url && window.wmWpTrackApi && window.wmWpTrackMap) {
       window.wmWpTrackApi.create(options.download_url).features(options.tracks).then(function (result) {
         if (!result.features.length) {
