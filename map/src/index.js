@@ -186,19 +186,19 @@ function name(button, label) {
 }
 
 // Bandiera a scacchi dell'arrivo (oc:8969), grande quanto il cerchio che il componente disegna per l'arrivo (raggio
-// 12, bordo bianco di 3: assets/js/track-map.js). Sta nello stesso layer, come stile in più del punto
+// 15, bordo bianco di 3: assets/js/track-map.js). Sta nello stesso layer, come stile in più del punto
 // (getAdditionalPointStyles del componente): sopra la traccia e sotto i punti di interesse disegnati dopo, che la
 // coprono al centro lasciando vedere l'anello a scacchi intorno, come il verde della partenza
 const FLAG = new Style({
   image: new Icon({
     src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><defs>'
+      '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><defs>'
       + '<pattern id="s" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#fff"/>'
       + '<rect width="3" height="3" fill="#1A1A1A"/><rect x="3" y="3" width="3" height="3" fill="#1A1A1A"/></pattern></defs>'
-      + '<circle cx="15" cy="15" r="12" fill="url(#s)" stroke="#fff" stroke-width="3"/></svg>'
+      + '<circle cx="18" cy="18" r="15" fill="url(#s)" stroke="#fff" stroke-width="3"/></svg>'
     ),
-    width: 30,
-    height: 30
+    width: 36,
+    height: 36
   })
 });
 

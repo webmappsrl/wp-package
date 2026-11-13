@@ -63,18 +63,8 @@ function wmwp_detail_request_urls(): array {
 		return (array) $detail['urls'];
 	}
 	$path = (string) get_query_var( 'wmwp_detail_path' );
-	$item = '' !== $path ? wmwp_detail_find_any( trim( strtolower( $path ), '/' ) ) : null;
-	if ( null === $item ) {
-		return [];
-	}
-	$urls = [];
-	foreach ( wmwp_detail_languages() as $code ) {
-		$url = wmwp_detail_url( $item[0], (int) $item[1], $code );
-		if ( '' !== $url ) {
-			$urls[ $code ] = $url;
-		}
-	}
-	return $urls;
+	$item = '' !== $path ? wmwp_detail_find_any( wmwp_detail_normalize_path( $path ) ) : null;
+	return null === $item ? [] : wmwp_detail_urls( $item[0], (int) $item[1] );
 }
 
 /**
@@ -116,10 +106,10 @@ add_filter(
 add_action(
 	'init',
 	function () {
-		if ( ! class_exists( 'WP_Sitemaps_Provider' ) || ! function_exists( 'wp_register_sitemap_provider' ) ) {
+		// La classe la carica index.php
+		if ( ! class_exists( 'WMWP_Detail_Sitemap_Provider' ) || ! function_exists( 'wp_register_sitemap_provider' ) ) {
 			return;
 		}
-		require_once WMWP_PATH . 'includes/class-wmwp-detail-sitemap-provider.php';
 		wp_register_sitemap_provider( WMWP_Detail_Sitemap_Provider::NAME, new WMWP_Detail_Sitemap_Provider() );
 	}
 );

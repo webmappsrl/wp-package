@@ -23,6 +23,7 @@ define( 'WMWP_URL', plugin_dir_url( __FILE__ ) );
 
 require_once WMWP_PATH . 'includes/i18n.php';
 require_once WMWP_PATH . 'includes/settings.php';
+require_once WMWP_PATH . 'includes/http.php';
 require_once WMWP_PATH . 'includes/detail-index.php';
 require_once WMWP_PATH . 'includes/detail-base.php';
 require_once WMWP_PATH . 'includes/detail-route.php';
@@ -33,3 +34,11 @@ require_once WMWP_PATH . 'includes/icons.php';
 require_once WMWP_PATH . 'includes/class-wmwp-detail-sitemap-provider.php';
 require_once WMWP_PATH . 'includes/search.php';
 require_once WMWP_PATH . 'includes/map.php';
+
+// Alla disattivazione il plugin toglie il suo evento cron (ricostruzione dell'indice dei dettagli)
+register_deactivation_hook(
+	__FILE__,
+	function () {
+		wp_clear_scheduled_hook( WMWP_DETAIL_CRON_HOOK );
+	}
+);

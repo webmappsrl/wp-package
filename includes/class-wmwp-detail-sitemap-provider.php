@@ -24,10 +24,11 @@ class WMWP_Detail_Sitemap_Provider extends WP_Sitemaps_Provider {
 	 * @return array<string, object>
 	 */
 	public function get_object_subtypes() {
-		return [
-			'track' => (object) [ 'name' => 'track' ],
-			'poi'   => (object) [ 'name' => 'poi' ],
-		];
+		$subtypes = [];
+		foreach ( WMWP_DETAIL_TYPES as $type ) {
+			$subtypes[ $type ] = (object) [ 'name' => $type ];
+		}
+		return $subtypes;
 	}
 
 	/**

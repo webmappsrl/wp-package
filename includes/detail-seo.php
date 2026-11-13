@@ -12,6 +12,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Lunghezza massima della meta description, in caratteri (la soglia oltre cui i motori la tagliano)
+const WMWP_DETAIL_DESCRIPTION_LENGTH = 160;
+
 /**
  * Meta di un dettaglio.
  *
@@ -21,8 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 function wmwp_detail_meta( array $detail ): array {
 	$props = (array) ( $detail['feature']['properties'] ?? [] );
 	$text  = trim( preg_replace( '/\s+/u', ' ', wp_strip_all_tags( wmwp_detail_text( $props['description'] ?? null, (string) $detail['lang'] ) ) ) );
-	if ( mb_strlen( $text ) > 160 ) {
-		$cut  = mb_substr( $text, 0, 160 );
+	if ( mb_strlen( $text ) > WMWP_DETAIL_DESCRIPTION_LENGTH ) {
+		$cut  = mb_substr( $text, 0, WMWP_DETAIL_DESCRIPTION_LENGTH );
 		$text = rtrim( mb_substr( $cut, 0, (int) mb_strrpos( $cut, ' ' ) ), " ,.;:" ) . '…';
 	}
 	$image = $props['feature_image']['url'] ?? '';

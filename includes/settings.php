@@ -78,6 +78,9 @@ function wmwp_get_shards_config( bool $force_refresh = false ): array {
 	$last = get_option( WMWP_SHARDS_LAST_OPTION );
 	$last = is_array( $last ) ? $last : [];
 	set_transient( WMWP_SHARDS_CACHE_KEY, $last, HOUR_IN_SECONDS );
+	// Lo stesso per i domini delle webapp: senza, wmwp_get_webapp_redirects() riproverebbe a ogni chiamata
+	$redirects = get_option( WMWP_WEBAPP_REDIRECTS_LAST );
+	set_transient( WMWP_WEBAPP_REDIRECTS_KEY, is_array( $redirects ) ? $redirects : [], HOUR_IN_SECONDS );
 	return $last;
 }
 

@@ -182,10 +182,19 @@ $check( is_array( $riletta ) && 'Salita' === $riletta['name'], 'JSON vecchio in 
 $check( 'Salita' === ( get_transient( 'wmwp_detail_json_track_5' )['feature']['properties']['name']['it'] ?? '' ), 'la cache prende il JSON nuovo' );
 delete_transient( 'wmwp_detail_json_track_5' );
 
-// 4. Shard in errore → WP_Error
+// 4. Elemento che la fonte non ha (404: cancellato, o id che non esiste): pagina 404, non 503
+$shard['status'] = 404;
+delete_transient( 'wmwp_detail_json_track_5' );
+$assente = wmwp_detail_fetch( 'track', 5, true );
+$check( is_wp_error( $assente ) && 'wmwp_detail_not_found' === $assente->get_error_code(), 'fetch: 404 della fonte → wmwp_detail_not_found' );
+$check( null === wmwp_detail_load( $track ), 'elemento cancellato → null (404), non WP_Error (503)' );
+$check( null === wmwp_detail_load( $poi ), 'POI cancellato → null (404)' );
+
+// 4b. Shard in errore (5xx, rete) → WP_Error: la pagina è «non disponibile» (503)
 $shard['status'] = 500;
 delete_transient( 'wmwp_detail_json_track_5' );
-$check( is_wp_error( wmwp_detail_load( $track ) ), 'shard in errore → WP_Error' );
+$errore = wmwp_detail_load( $track );
+$check( is_wp_error( $errore ) && 'wmwp_detail_unavailable' === $errore->get_error_code(), 'shard in errore → WP_Error wmwp_detail_unavailable' );
 $check( false === get_transient( 'wmwp_detail_json_track_5' ), 'l\'errore non va in cache' );
 
 false === $saved[0] ? delete_transient( 'wmwp_detail_index' ) : set_transient( 'wmwp_detail_index', $saved[0], HOUR_IN_SECONDS );

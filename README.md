@@ -162,7 +162,14 @@ Si sostituiscono copiandoli in `wp-package/` nel tema: `search.php` (scheletro),
 dettagli `track.php`, `poi.php` e `detail-unavailable.php`, che ricevono `$detail` (`wmwp_detail_current()`: `type`,
 `id`, `lang`, `path`, `name`, `url`, `urls` per lingua, `feature` con il JSON dello shard, le cui chiavi possono mancare)
 e aprono e chiudono la pagina con `wmwp_template_header()`/`wmwp_template_footer()` (temi classici e a blocchi). Sul
-`body` dei dettagli: `wmwp-detail`, `wmwp-detail-<type>`. Il JS
+`body` dei dettagli: `wmwp-detail`, `wmwp-detail-<type>`.
+
+Funzioni dei dettagli per i temi: `wmwp_detail_url( $type, $id, $lang )` (indirizzo dall'indice, '' se l'elemento non
+c'è; `$lang` è il codice WPML, es. `en-us`), `wmwp_detail_urls( $type, $id )` (lingua → indirizzo),
+`wmwp_detail_url_by_id( $type, $id, $lang )` (come la prima, ma controlla con la chiave stabile che l'id sia ancora
+dello stesso elemento e, se serve, ricostruisce l'indice: la usa l'indirizzo per id), `wmwp_detail_source( $type,
+$props )` (chiave stabile). Per le richieste allo shard `wmwp_http_json( $url, $timeout, $headers )` restituisce stato
+HTTP (0 se la richiesta non arriva), JSON decodificato e risposta (`includes/http.php`). Il JS
 cerca gli elementi `data-wmwp`. Il `<noscript>` di `search.php` manda alla ricerca di WordPress con `nojs=1`: un tema che
 reindirizza `?s=` alla pagina di ricerca non deve farlo quando c'è quel parametro. Una sola ricerca per pagina
 (gli id dello scheletro sono fissi). Classi su cui il tema può contare: `wmwp-search`, `wmwp-card`, `wmwp-row`,
@@ -194,8 +201,8 @@ Si usa in quattro modi:
   tratteggia, `label` è il testo lungo la linea, `url` la scheda che si apre al clic, `ends` (`true` o `[ 'start' =>
   '…', 'end' => '…' ]`, le etichette del tooltip; di base «Partenza» e «Arrivo» tradotte) mette un cerchio verde
   all'inizio e una bandiera a scacchi alla fine, come la mappa di GeoHub dei siti Drupal; in un anello, con la fine
-  entro 50 m dall'inizio, solo la partenza. I due segni hanno raggio 12, più dei punti: un punto sopra lascia vedere
-  l'anello intorno. Ogni punto è `[ 'coordinates' => [ lon,
+  entro 50 m dall'inizio, solo la partenza. I due segni hanno raggio 15, come il cerchio di GeoHub e più dei punti
+  (raggio 9): un punto sopra lascia vedere l'anello intorno. Ogni punto è `[ 'coordinates' => [ lon,
   lat ], 'color', 'number', 'tooltip', 'url' ]`: con `number` il punto è più grande e porta il numero al centro, per
   legarlo alla legenda che stampa il tema. Le geometrie delle tracce si leggono da `api/ec/track/multiple`; i colori
   validi sono esadecimali o rgb()/rgba(), gli indirizzi solo http(s). Senza tracce né punti, ''. In JS la stessa
@@ -286,16 +293,23 @@ si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano i
 - **Slug**: il nome nella lingua della pagina (italiano se manca) passato in `sanitize_title`; i doppioni nella stessa
   base prendono `-<chiave stabile>` (filtro `wmwp_detail_source`), così l'indirizzo non cambia con un reset degli id
   dello shard, o `-<id>` se l'elemento non ce l'ha. Una traduzione aggiunta o un nome cambiato cambiano l'indirizzo da
-  soli; il vecchio porta al nuovo con un 301 finché è nell'indice.
-- **Risposte**: 200; 301 se lo slug è di un'altra lingua o la base è cambiata; 404 se l'indirizzo non c'è (prima
-  l'indice si ricostruisce una volta, al massimo ogni 5 minuti); 503 con `Retry-After` se lo shard non risponde.
-  Prima di stampare si controlla che l'id porti ancora all'elemento chiesto: la chiave stabile, se c'è nel dettaglio e
-  nell'indice (una traccia rinominata resta lei, una omonima che ha preso il suo id no); altrimenti lo slug del nome. Il
-  dettaglio di un POI non ha il nome, che viene dall'indice.
-- **Indice**: transient `wmwp_detail_index` (1 ora) più l'ultimo buono in `wmwp_detail_index_last`; non si salva mai
-  vuoto né con meno della metà degli elementi del precedente.
-- **Indirizzo per id**: `?wmwp_detail=<track|poi>&wmwp_id=<id>` manda con un 301 al dettaglio nella lingua della
-  richiesta; è il `link_template` predefinito della source `tracks` (`wmwp_detail_link_template()`), quindi righe,
+  soli: alla prima richiesta del vecchio l'indice si ricostruisce (se permesso) e risponde con un 301 al nuovo.
+- **Risposte**: 200; 301 se lo slug è di un'altra lingua, la base è cambiata o l'elemento è stato rinominato; 404 se
+  l'indirizzo non c'è o la fonte dice che l'elemento non c'è più (prima l'indice si ricostruisce una volta, al massimo
+  ogni 5 minuti); 503 con `Retry-After` solo se la fonte non risponde (rete, timeout, 5xx). Prima di stampare si
+  controlla che l'id porti ancora all'elemento chiesto: la chiave stabile, se c'è nel dettaglio e nell'indice (una
+  traccia rinominata resta lei, una omonima che ha preso il suo id no); altrimenti lo slug del nome. Il dettaglio di un
+  POI non ha il nome, che viene dall'indice. Il ripiego per slug (base cambiata) resta fra i tipi della base chiesta.
+- **Indice**: transient `wmwp_detail_index` (2 ore, letto una volta per richiesta) più l'ultimo buono in
+  `wmwp_detail_index_last`; un evento cron (`wmwp_detail_refresh_index`) lo rifà ogni ora, così di solito la
+  ricostruzione non la paga un visitatore. Non si salva mai vuoto, e un tipo che cala sotto la metà si scarta per due
+  volte di fila (alla terza si accetta). Il JSON di ogni dettaglio resta in cache 6 ore per la richiesta condizionale;
+  il controllo dopo la cache breve è un transient a parte, così con il 304 il JSON non si riscrive.
+- **Regola di rewrite**: `<base>/<slug>` tranne feed, embed, trackback e pagine dei commenti della pagina base, che
+  restano a WordPress; i nomi riservati di WordPress (`feed`, `page`, `search`…) non diventano basi.
+- **Indirizzo per id**: `?wmwp_detail=<track|poi>&wmwp_id=<id>` manda con un 302 (la destinazione cambia con una
+  rinomina o un reset) al dettaglio nella lingua della richiesta, dopo aver controllato con la chiave stabile che l'id
+  sia ancora dello stesso elemento: un id nuovo o passato a un altro elemento ricostruisce l'indice una volta; è il `link_template` predefinito della source `tracks` (`wmwp_detail_link_template()`), quindi righe,
   card e card della mappa della ricerca portano al dettaglio.
 - **SEO**, con il solo core: titolo, `description`, Open Graph e canonical stampati dal plugin; con Impreza i dati
   vanno nei suoi `us_meta_tags`/`us_rel_canonical`, con Yoast o Rank Math i loro meta si tolgono sui dettagli. Con

@@ -88,10 +88,23 @@ $set = [
 $svg = wmwp_icon_svg( 'txn-vecchia' );
 $check( false !== strpos( $svg, 'viewBox="0 0 512 512"' ) && false !== strpos( $svg, '<path d="M1 1L2 2Z"' ), 'formato vecchio del set' );
 
-// 5. Set che non risponde o shard senza awsApi → stringa vuota
+// 4b. Ogni nome ha la sua scadenza: una voce scaduta si rilegge dal set anche se il transient c'è ancora
+$set   = [
+	'height'    => 1024,
+	'icons'     => [ [ 'paths' => [ 'M9 9L8 8Z' ], 'tags' => [ 'txn-uno' ] ] ],
+	'selection' => [ [ 'name' => 'txn-uno' ] ],
+];
+set_transient( 'wmwp_icons', [ 'txn-uno' => [ 'svg' => '<svg>vecchia</svg>', 'until' => time() - 1 ] ], DAY_IN_SECONDS );
+$check( false !== strpos( wmwp_icon_svg( 'txn-uno' ), 'M9 9L8 8Z' ), 'voce scaduta → riletta dal set' );
+
+// 5. Set che non risponde o shard senza awsApi → stringa vuota; nella stessa richiesta non si riprova per ogni nome
 delete_transient( 'wmwp_icons' );
-$set = null;
+$set   = null;
+$calls = 0;
 $check( '' === wmwp_icon_svg( 'txn-uno' ), 'set che non risponde → stringa vuota' );
+wmwp_icon_svg( 'txn-due' );
+wmwp_icon_svg( 'txn-tre' );
+$check( 1 === $calls, 'set che non risponde: una sola richiesta per più nomi (' . $calls . ')' );
 delete_transient( 'wmwp_icons' );
 $aws = '';
 $check( '' === wmwp_icon_svg( 'txn-uno' ), 'senza awsApi → stringa vuota' );

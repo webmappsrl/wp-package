@@ -19,6 +19,10 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le ve
 - `wmwp_icon_svg()`: SVG di un'icona del set IcoMoon dello shard (`<awsApi>/json/icons.json`) dal nome, con cache dei
   nomi già chiesti (oc:8969).
 - Indirizzo per id `?wmwp_detail=&wmwp_id=` come `link_template` predefinito della ricerca (oc:8969).
+- Indirizzo per id controllato con la chiave stabile e con un 302 (`wmwp_detail_url_by_id()`); elemento cancellato →
+  404 invece di 503; rinomina → 301; indice rifatto ogni ora dal cron (`wmwp_detail_refresh_index`) e letto una volta
+  per richiesta; regola di rewrite che lascia a WordPress feed, embed e pagine dei commenti della pagina base (oc:8969,
+  review interna).
 - Chiave stabile dei dettagli, `wmwp_detail_source()` e filtro `wmwp_detail_source` (di base `out_source_feature_id`):
   riconosce tracce e POI dopo un reset degli id dello shard, anche le tracce, e dà ai doppioni dello slug il suffisso
   `-<chiave>` invece di `-<id>`, stabile fra un reset e l'altro (oc:8969).

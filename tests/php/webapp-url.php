@@ -76,6 +76,29 @@ remove_filter( 'wmwp_webapp_url', $filtro );
 update_option( WMWP_OPTION_SHARD, '' );
 $check( '' === wmwp_webapp_url() && '' === wmwp_webapp_url( 'track', 5 ), 'senza shard, stringa vuota' );
 
+// 7. GitHub non risponde: una sola richiesta, poi l'ultima lettura riuscita resta in cache (un'ora), senza riprovare a
+// ogni chiamata (il tema chiede la webapp più volte per pagina)
+$richieste = 0;
+$giu       = function ( $pre, $args, $url ) use ( &$richieste ) {
+	if ( WMWP_SHARDS_CONFIG_URL !== $url ) {
+		return $pre;
+	}
+	++$richieste;
+	return new WP_Error( 'http_request_failed', 'timeout' );
+};
+add_filter( 'pre_http_request', $giu, 10, 3 );
+$saved_shards = [ get_transient( WMWP_SHARDS_CACHE_KEY ), get_option( WMWP_WEBAPP_REDIRECTS_LAST ) ];
+update_option( WMWP_WEBAPP_REDIRECTS_LAST, [ 'mappa.esempio.it' => [ 'shard' => 'forestas', 'app' => 1 ] ], false );
+delete_transient( WMWP_SHARDS_CACHE_KEY );
+delete_transient( WMWP_WEBAPP_REDIRECTS_KEY );
+$primo   = wmwp_get_webapp_redirects();
+$secondo = wmwp_get_webapp_redirects();
+remove_filter( 'pre_http_request', $giu, 10 );
+$check( 1 === $richieste, 'GitHub giù: una sola richiesta per più chiamate (' . $richieste . ')' );
+$check( isset( $primo['mappa.esempio.it'], $secondo['mappa.esempio.it'] ), 'GitHub giù: ultima lettura riuscita' );
+false === $saved_shards[0] ? delete_transient( WMWP_SHARDS_CACHE_KEY ) : set_transient( WMWP_SHARDS_CACHE_KEY, $saved_shards[0], DAY_IN_SECONDS );
+false === $saved_shards[1] ? delete_option( WMWP_WEBAPP_REDIRECTS_LAST ) : update_option( WMWP_WEBAPP_REDIRECTS_LAST, $saved_shards[1], false );
+
 update_option( WMWP_OPTION_SHARD, $saved[0] );
 update_option( WMWP_OPTION_APP_ID, $saved[1] );
 false === $saved[2] ? delete_option( WMWP_OPTION_WEBAPP ) : update_option( WMWP_OPTION_WEBAPP, $saved[2] );

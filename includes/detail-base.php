@@ -50,7 +50,8 @@ function wmwp_detail_base( string $type, ?array $kind, string $lang ): string {
 		}
 	}
 	$name = null === $kind ? '' : sanitize_title( wmwp_detail_text( $kind, $lang ) );
-	return '' !== $name ? $name : ( 'poi' === $type ? 'poi' : 'track' );
+	// Senza tipo, la base è il tipo stesso: /track/ o /poi/
+	return '' !== $name ? $name : $type;
 }
 
 // Una pagina base salvata (rinominata, spostata): l'impronta cambia e l'indice si ricostruisce subito

@@ -417,3 +417,15 @@ msgstr "Partenza"
 #: includes/map.php:266
 msgid "Finish"
 msgstr "Arrivo"
+
+#: includes/detail-render.php:27
+msgid "Shard not configured"
+msgstr "Shard non configurato"
+
+#: includes/detail-render.php:54
+msgid "Detail not found"
+msgstr "Dettaglio non trovato"
+
+#: includes/detail-render.php:59
+msgid "Detail not available"
+msgstr "Dettaglio non disponibile"

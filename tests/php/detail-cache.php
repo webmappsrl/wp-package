@@ -187,6 +187,11 @@ $check( $before === $calls, 'shard giù: il tentativo successivo aspetta 5 minut
 
 $reset();
 
+// Ricostruzione in anticipo: un evento cron ogni ora rifà l'indice, che in cache dura di più, così di solito non la
+// paga un visitore
+$check( false !== wp_next_scheduled( 'wmwp_detail_refresh_index' ), 'evento cron della ricostruzione programmato' );
+$check( defined( 'WMWP_DETAIL_INDEX_TTL' ) && WMWP_DETAIL_INDEX_TTL > HOUR_IN_SECONDS, 'l\'indice in cache dura più dell\'intervallo del cron' );
+
 if ( $failures ) {
 	echo 'FAIL: ' . implode( '; ', $failures ) . "\n";
 	exit( 1 );

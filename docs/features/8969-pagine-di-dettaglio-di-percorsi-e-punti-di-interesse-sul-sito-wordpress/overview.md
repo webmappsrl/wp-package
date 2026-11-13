@@ -39,7 +39,7 @@ Dopo questo lavoro il plugin serve le pagine di dettaglio di EcTrack ed EcPoi **
    già letti, e imposta titolo, descrizione e canonical dal JSON.
 
 Lo slug inesistente risponde 404. Le card della ricerca portano al dettaglio con un indirizzo per id
-(`?wmwp_detail=track&wmwp_id=<id>`), che il plugin manda con un 301 all'indirizzo con base e slug
+(`?wmwp_detail=track&wmwp_id=<id>`), che il plugin manda con un 302 all'indirizzo con base e slug
 nella lingua della pagina: il JavaScript della ricerca non può calcolare lo slug come PHP (doppioni,
 `sanitize_title`), così c'è una sola fonte.
 
@@ -64,8 +64,8 @@ slug si ricava in WordPress perché id e nome ci sono già: al backend non serve
 - [x] Rewrite e query var registrate solo per le basi in uso (quelle ricavate dai dati e la pagina
       scelta), così le pagine esistenti con lo stesso primo pezzo di indirizzo non vengono
       intercettate; con la base da una pagina, la pagina continua a servire il suo contenuto e il
-      dettaglio risponde solo con lo slug dopo. Regole rigenerate quando cambiano le impostazioni o
-      compare una base nuova nei dati.
+      dettaglio risponde solo con lo slug dopo. Regole e indice rigenerati alla prima richiesta dopo un cambio
+      delle impostazioni (l'impronta delle basi cambia) o quando compare una base nuova nei dati.
 - [x] Tabella `slug → id` per tracce e POI in transient; a uno slug non trovato si ricostruisce una
       volta prima del 404, così una traccia appena pubblicata è subito raggiungibile.
 - [x] Doppioni dello slug risolti con `-<chiave stabile>` (filtro `wmwp_detail_source`, di base
@@ -82,7 +82,8 @@ slug si ricava in WordPress perché id e nome ci sono già: al backend non serve
 - [x] Lettura del JSON con timeout: la traccia dal suo file su AWS (`awsApi` di `environment.ts`; su dev e UAT
       risponde MinIO dello shard, con la stessa logica) con richiesta condizionale (ETag/Last-Modified), il POI
       dallo shard (`api/ec/poi/<id>`); cache breve di 60 s (`wmwp_detail_cache_ttl`). Se la fonte non risponde,
-      una pagina d'errore con stato 503, non un 404 e non una pagina vuota.
+      una pagina d'errore con stato 503, non un 404 e non una pagina vuota; se l'API dice che l'elemento non c'è
+      (cancellato), indice ricostruito e 404 (o 301 se l'elemento sta a un altro indirizzo).
 - [x] Template predefiniti minimi (nome, mappa, descrizione) sostituibili copiandoli in `wp-package/`
       nel tema, come quelli della ricerca; i dati arrivano al template già letti, in una variabile.
 - [x] SEO di ogni dettaglio, come una pagina vera, **con il solo core di WordPress, su qualsiasi tema**:
@@ -96,13 +97,15 @@ slug si ricava in WordPress perché id e nome ci sono già: al backend non serve
       - niente doppioni: dove il tema o un plugin SEO stampa già i suoi meta (Impreza, Yoast, Rank
         Math), sulle pagine di dettaglio il plugin passa a loro i dati o toglie i loro, con un piccolo
         adattatore attivo solo se quel tema o plugin c'è;
-      - con WPML attivo, `hreflang` (`wpml_hreflangs`) e selettore di lingua (`icl_ls_languages`) con
-        l'indirizzo dell'elemento nell'altra lingua, non quello della pagina madre; senza WPML, niente;
+      - con WPML attivo, `hreflang` e selettore di lingua (`icl_ls_languages`) con l'indirizzo dell'elemento
+        nell'altra lingua, non quello della pagina madre; gli `hreflang` li stampa il plugin (`wp_head`), perché
+        WPML li stampa solo per gli oggetti della query (i post); senza WPML, niente;
       - la pagina di dettaglio non viene indicizzata come la pagina madre.
 - [x] Sitemap dei dettagli nella sitemap del core (`wp-sitemap.xml`), con un provider registrato da
       `wp_register_sitemap_provider()`: tutte le tracce e tutti i POI con l'indirizzo in ogni lingua,
       presi dalle tabelle `slug → id`, quindi sempre allineati ai dati del backend.
-- [x] Indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` che risponde con un 301 all'indirizzo
+- [x] Indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` che risponde con un 302 (review del 13/11: la
+      destinazione cambia, il 301 resterebbe nella cache del browser) all'indirizzo
       del dettaglio nella lingua della richiesta (404 se l'id non c'è); è il `link_template`
       predefinito della source `tracks`, quindi card, righe e card della mappa della ricerca portano
       al dettaglio senza che il tema scriva niente.
@@ -159,6 +162,7 @@ Repo `wp-package` (questo):
 - `includes/detail-base.php`, `detail-index.php`, `detail-route.php`, `detail-render.php`, `detail-seo.php`,
   `detail-wpml.php`, `class-wmwp-detail-sitemap-provider.php` (nuovi) — basi, indice `slug → id` e chiave stabile,
   rewrite e redirect, lettura del JSON con cache, meta e canonical, `hreflang` e selettore di lingua, sitemap.
+- `includes/http.php` (nuovo) — `wmwp_http_json()`, la GET con lo stato della risposta (404 della fonte contro rete giù).
 - `includes/map.php` — `wmwp_map()` e `config.json` all'indirizzo del server; `includes/icons.php` (nuovo) —
   `wmwp_icon_svg()`; `includes/settings.php` anche per `aws_api`, `wmwp_server_url()` e `wmwp_webapp_url()`.
 - `assets/js/track-map.js`, `assets/js/map-embed.js`, `map/src/` e `assets/dist/` — mappa del dettaglio.

@@ -83,8 +83,17 @@ wmwp_detail_fetch( 'track', 5 );
 $check( 1 === count( $log ), 'seconda lettura entro 60 s → nessuna chiamata' );
 
 // 3. Dopo la cache breve (o con la rilettura forzata): richiesta condizionale, 304, stesso JSON
-$log = [];
+$log      = [];
+$scritture = 0;
+$conta     = function ( $transient ) use ( &$scritture ) {
+	if ( 'wmwp_detail_json_track_5' === $transient ) {
+		++$scritture;
+	}
+};
+add_action( 'setted_transient', $conta );
 $check( 'Salita' === $name( wmwp_detail_fetch( 'track', 5, true ) ), 'con il 304 si riusa il JSON in cache' );
+remove_action( 'setted_transient', $conta );
+$check( 0 === $scritture, 'con il 304 il JSON in cache non si riscrive (' . $scritture . ')' );
 $check( 1 === count( $log ) && '"e1"' === ( $log[0][2]['if-none-match'] ?? '' ), 'la richiesta porta If-None-Match' );
 
 // 4. File cambiato su AWS: 200, JSON nuovo in cache

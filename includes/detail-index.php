@@ -35,6 +35,21 @@ function wmwp_detail_text( $names, string $lang ): string {
 	return '';
 }
 
+/** Percorso `<base>/<slug>` della richiesta in forma canonica: minuscolo, senza barre ai lati. */
+function wmwp_detail_normalize_path( string $path ): string {
+	return trim( strtolower( $path ), '/' );
+}
+
+/**
+ * Base e slug di un percorso `<base>/<slug>` (la base può avere più segmenti, lo slug è l'ultimo).
+ *
+ * @return array{0: string, 1: string}
+ */
+function wmwp_detail_split_path( string $path ): array {
+	$cut = strrpos( $path, '/' );
+	return false === $cut ? [ '', $path ] : [ substr( $path, 0, $cut ), substr( $path, $cut + 1 ) ];
+}
+
 /** Slug dal nome; se il nome non ha niente da tenere (solo punteggiatura o simboli) lo slug è l'id. */
 function wmwp_detail_slug( string $name, int $id ): string {
 	$slug = sanitize_title( $name );
@@ -153,22 +168,34 @@ const WMWP_DETAIL_REBUILT_AT = 'wmwp_detail_index_rebuilt_at';
 // Una ricostruzione forzata (indirizzo non trovato, nome che non torna) al massimo ogni 5 minuti: i bot che
 // chiedono slug inventati non devono scaricare la lista ogni volta
 const WMWP_DETAIL_REBUILD_INTERVAL = 300;
+// Altre opzioni dell'indice: le basi in uso (piccola, caricata sempre, per le regole di rewrite) e gli scarti di fila
+const WMWP_DETAIL_BASES_OPTION   = 'wmwp_detail_bases';
+const WMWP_DETAIL_REJECTS_OPTION = 'wmwp_detail_index_rejects';
+// Durata dell'indice in cache e del blocco di una ricostruzione in corso, in secondi. L'indice lo rifà ogni ora un
+// evento cron (WMWP_DETAIL_CRON_HOOK), prima che scada: di solito la ricostruzione non la paga un visitatore
+const WMWP_DETAIL_INDEX_TTL = 2 * HOUR_IN_SECONDS;
+const WMWP_DETAIL_CRON_HOOK = 'wmwp_detail_refresh_index';
+const WMWP_DETAIL_LOCK_TTL  = 60;
+// Un tipo che cala sotto questa frazione dell'indice precedente è una lista a metà: si scarta, al massimo per
+// WMWP_DETAIL_MAX_REJECTS volte di fila; alla volta dopo il calo si accetta
+const WMWP_DETAIL_REJECT_RATIO = 0.5;
+const WMWP_DETAIL_MAX_REJECTS  = 2;
+// Durata del JSON di un dettaglio in cache (oltre la cache breve serve solo alla richiesta condizionale): ogni JSON con
+// la geometria pesa decine di KB in wp_options
+const WMWP_DETAIL_JSON_TTL = 6 * HOUR_IN_SECONDS;
+// Pagina «non disponibile» (503): fra quanti secondi riprovare
+const WMWP_DETAIL_RETRY_AFTER = 120;
+// Timeout delle richieste: il dettaglio di un elemento e le due liste dell'indice
+const WMWP_DETAIL_TIMEOUT      = 5;
+const WMWP_DETAIL_LIST_TIMEOUT = 10;
 
 /**
- * JSON di una risposta dello shard, anche quando è una stringa JSON dentro un JSON (pois.geojson sul dev), o null.
+ * JSON di una risposta dello shard (all'indirizzo del server, wmwp_server_url()), o null.
  *
  * @return array<mixed>|null
  */
 function wmwp_detail_get_json( string $url, int $timeout ) {
-	$response = wp_remote_get( wmwp_server_url( $url ), [ 'timeout' => $timeout ] );
-	if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-		return null;
-	}
-	$data = json_decode( (string) wp_remote_retrieve_body( $response ), true );
-	if ( is_string( $data ) ) {
-		$data = json_decode( $data, true );
-	}
-	return is_array( $data ) ? $data : null;
+	return wmwp_http_json( wmwp_server_url( $url ), $timeout )['data'];
 }
 
 /**
@@ -185,8 +212,8 @@ function wmwp_detail_fetch_items(): ?array {
 		return null;
 	}
 
-	$tracks = wmwp_detail_get_json( add_query_arg( 'app', wmwp_app_param(), $elastic ), 10 );
-	$pois   = wmwp_detail_get_json( $origin . '/api/v2/app/' . $app . '/pois.geojson', 10 );
+	$tracks = wmwp_detail_get_json( add_query_arg( 'app', wmwp_app_param(), $elastic ), WMWP_DETAIL_LIST_TIMEOUT );
+	$pois   = wmwp_detail_get_json( $origin . '/api/v2/app/' . $app . '/pois.geojson', WMWP_DETAIL_LIST_TIMEOUT );
 	// Una risposta di Elasticsearch scaduta o con shard falliti è parziale anche se lo stato è 200
 	if ( null === $tracks || null === $pois || ! empty( $tracks['timed_out'] ) || (int) ( $tracks['_shards']['failed'] ?? 0 ) > 0 ) {
 		return null;
@@ -242,16 +269,40 @@ function wmwp_detail_rebuild_allowed(): bool {
 }
 
 /**
- * Indice dei dettagli: dalla cache (1 ora), o ricostruito dallo shard. Con `$rebuild` si ricostruisce anche se la
- * cache c'è, ma non più di una volta ogni 5 minuti. Un indice nuovo vuoto, o con meno della metà degli elementi del
- * precedente (lista a metà durante una reindicizzazione), non si salva: resta il vecchio. Null solo se non c'è mai
- * stato un indice e lo shard non risponde.
+ * Indice in cache, letto una volta per richiesta: è grande (circa 800 KB con 1700 elementi) e il tema e la sitemap
+ * chiedono un indirizzo per ogni elemento. La copia della richiesta si butta quando il transient si scrive o si
+ * cancella.
+ *
+ * @return array<string, mixed>|null
+ */
+function wmwp_detail_index_cached(): ?array {
+	if ( ! array_key_exists( 'wmwp_detail_index_memo', $GLOBALS ) ) {
+		$cached                              = get_transient( WMWP_DETAIL_INDEX_KEY );
+		$GLOBALS['wmwp_detail_index_memo'] = is_array( $cached ) ? $cached : null;
+	}
+	return $GLOBALS['wmwp_detail_index_memo'];
+}
+
+/** Butta la copia dell'indice della richiesta quando il transient cambia. */
+function wmwp_detail_index_forget( string $transient ): void {
+	if ( WMWP_DETAIL_INDEX_KEY === $transient ) {
+		unset( $GLOBALS['wmwp_detail_index_memo'] );
+	}
+}
+add_action( 'setted_transient', 'wmwp_detail_index_forget' );
+add_action( 'deleted_transient', 'wmwp_detail_index_forget' );
+
+/**
+ * Indice dei dettagli: dalla cache (WMWP_DETAIL_INDEX_TTL), o ricostruito dallo shard. Con `$rebuild` si ricostruisce
+ * anche se la cache c'è, ma non più di una volta ogni WMWP_DETAIL_REBUILD_INTERVAL secondi. Un indice nuovo vuoto non
+ * si salva; uno in cui un tipo cala sotto WMWP_DETAIL_REJECT_RATIO del precedente (lista a metà durante una
+ * reindicizzazione) si scarta per WMWP_DETAIL_MAX_REJECTS volte di fila, e alla volta dopo si accetta. Null solo se
+ * non c'è mai stato un indice e lo shard non risponde.
  *
  * @return array{langs: list<string>, paths: array, urls: array, count: int}|null
  */
 function wmwp_detail_index( bool $rebuild = false ): ?array {
-	$cached = get_transient( WMWP_DETAIL_INDEX_KEY );
-	$cached = is_array( $cached ) ? $cached : null;
+	$cached = wmwp_detail_index_cached();
 	// Un indice costruito con altre basi (impostazioni, tema o pagina base rinominata) non vale più: si ricostruisce
 	$config = wmwp_detail_base_signature();
 	if ( null !== $cached && ( $cached['config'] ?? '' ) !== $config ) {
@@ -265,11 +316,12 @@ function wmwp_detail_index( bool $rebuild = false ): ?array {
 	}
 	$last = $cached ?? get_option( WMWP_DETAIL_INDEX_LAST, null );
 	$last = is_array( $last ) && ( $last['config'] ?? '' ) === $config ? $last : null;
-	// Un tentativo ogni 5 minuti al massimo, riuscito o no: con lo shard giù non si richiama a ogni richiesta del sito
+	// Un tentativo ogni WMWP_DETAIL_REBUILD_INTERVAL secondi al massimo, riuscito o no: con lo shard giù non si
+	// richiama a ogni richiesta del sito
 	if ( ! wmwp_detail_rebuild_allowed() || get_transient( WMWP_DETAIL_INDEX_LOCK ) ) {
 		return $last;
 	}
-	set_transient( WMWP_DETAIL_INDEX_LOCK, 1, 60 );
+	set_transient( WMWP_DETAIL_INDEX_LOCK, 1, WMWP_DETAIL_LOCK_TTL );
 	update_option( WMWP_DETAIL_REBUILT_AT, time(), false );
 
 	$items = wmwp_detail_fetch_items();
@@ -279,24 +331,22 @@ function wmwp_detail_index( bool $rebuild = false ): ?array {
 		return $last;
 	}
 
-	// Un tipo che cala di più della metà (lista a metà durante una reindicizzazione) non si salva; dopo tre scarti di
-	// fila il calo si accetta: vuol dire che i dati sono cambiati davvero
-	$rejects = (int) get_option( 'wmwp_detail_index_rejects', 0 );
+	$rejects = (int) get_option( WMWP_DETAIL_REJECTS_OPTION, 0 );
 	foreach ( WMWP_DETAIL_TYPES as $type ) {
 		$before = (int) ( $last['counts'][ $type ] ?? 0 );
-		if ( $before > 0 && $index['counts'][ $type ] < 0.5 * $before && $rejects < 2 ) {
-			update_option( 'wmwp_detail_index_rejects', $rejects + 1, false );
+		if ( $before > 0 && $index['counts'][ $type ] < WMWP_DETAIL_REJECT_RATIO * $before && $rejects < WMWP_DETAIL_MAX_REJECTS ) {
+			update_option( WMWP_DETAIL_REJECTS_OPTION, $rejects + 1, false );
 			error_log( sprintf( '[wp-package] indice dei dettagli scartato: %s %d contro %d', $type, $index['counts'][ $type ], $before ) );
 			return $last;
 		}
 	}
-	delete_option( 'wmwp_detail_index_rejects' );
+	delete_option( WMWP_DETAIL_REJECTS_OPTION );
 
 	$index['config'] = $config;
-	set_transient( WMWP_DETAIL_INDEX_KEY, $index, HOUR_IN_SECONDS );
+	set_transient( WMWP_DETAIL_INDEX_KEY, $index, WMWP_DETAIL_INDEX_TTL );
 	update_option( WMWP_DETAIL_INDEX_LAST, $index, false );
 	// Le basi in un'opzione piccola caricata sempre: le regole di rewrite (init) non leggono l'indice intero
-	update_option( 'wmwp_detail_bases', wmwp_detail_index_bases( $index ), true );
+	update_option( WMWP_DETAIL_BASES_OPTION, wmwp_detail_index_bases( $index ), true );
 	return $index;
 }
 
@@ -309,7 +359,7 @@ function wmwp_detail_index_bases( array $index ): array {
 	$bases = [];
 	foreach ( (array) $index['paths'] as $paths ) {
 		foreach ( array_keys( $paths ) as $path ) {
-			$bases[ substr( $path, 0, (int) strrpos( $path, '/' ) ) ] = true;
+			$bases[ wmwp_detail_split_path( $path )[0] ] = true;
 		}
 	}
 	$bases = array_map( 'strval', array_keys( $bases ) );
@@ -327,3 +377,19 @@ function wmwp_detail_base_signature(): string {
 	}
 	return implode( ',', $parts );
 }
+
+// Ricostruzione in anticipo, ogni ora (anche lo scarto delle liste a metà vale come per le altre ricostruzioni)
+add_action(
+	WMWP_DETAIL_CRON_HOOK,
+	function () {
+		wmwp_detail_index( true );
+	}
+);
+add_action(
+	'init',
+	function () {
+		if ( ! wp_next_scheduled( WMWP_DETAIL_CRON_HOOK ) ) {
+			wp_schedule_event( time() + MINUTE_IN_SECONDS, 'hourly', WMWP_DETAIL_CRON_HOOK );
+		}
+	}
+);

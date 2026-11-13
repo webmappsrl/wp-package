@@ -3,8 +3,9 @@
  * Pagine di dettaglio (oc:8969): indirizzi, risoluzione e redirect.
  *
  * Una rewrite per le sole basi in uso (quelle dell'indice) passa `<base>/<slug>` nella query var
- * `wmwp_detail_path`; l'indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` (link della ricerca) manda con un 301
- * all'indirizzo del dettaglio nella lingua della richiesta. Con WPML in modalità directory il prefisso di lingua
+ * `wmwp_detail_path`; l'indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` (link della ricerca) manda con un 302
+ * all'indirizzo del dettaglio nella lingua della richiesta: temporaneo, perché la destinazione cambia con una rinomina,
+ * un cambio di base o un reset degli id. Con WPML in modalità directory il prefisso di lingua
  * (`/en/`) lo toglie WPML prima delle regole.
  */
 
@@ -13,6 +14,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const WMWP_DETAIL_RULES_SIGNATURE = 'wmwp_detail_rules_signature';
+// Nomi che WordPress usa negli indirizzi: non possono essere basi, né slug di un dettaglio sotto una base (sono feed,
+// embed e pagine dei commenti della pagina base, che restano a WordPress)
+const WMWP_DETAIL_RESERVED_BASES = [ 'feed', 'page', 'search', 'author', 'embed', 'comments', 'trackback', 'wp-admin', 'wp-json', 'wp-content', 'wp-includes' ];
+const WMWP_DETAIL_RESERVED_SLUGS = '(?:feed|rdf|rss|rss2|atom|embed|trackback|comment-page-[0-9]+)';
 
 /** Lingua della richiesta: quella corrente di WPML, o la prima delle lingue dei dettagli. */
 function wmwp_detail_current_language(): string {
@@ -36,16 +41,35 @@ function wmwp_detail_bases(): array {
 			$taken[] = trim( (string) $object->rewrite['slug'], '/' );
 		}
 	}
-	$bases = get_option( 'wmwp_detail_bases', null );
+	$bases = get_option( WMWP_DETAIL_BASES_OPTION, null );
 	if ( ! is_array( $bases ) ) {
 		// Opzione mai scritta (installazione nuova o aggiornamento del plugin): una volta sola dall'indice
 		$index = wmwp_detail_index();
 		$bases = null === $index ? [] : wmwp_detail_index_bases( $index );
 		if ( null !== $index ) {
-			update_option( 'wmwp_detail_bases', $bases, true );
+			update_option( WMWP_DETAIL_BASES_OPTION, $bases, true );
 		}
 	}
-	return array_values( array_diff( array_map( 'strval', $bases ), $taken ) );
+	return array_values( array_diff( array_map( 'strval', $bases ), $taken, WMWP_DETAIL_RESERVED_BASES ) );
+}
+
+/**
+ * Espressione della regola di rewrite dei dettagli per le basi date: `<base>/<slug>`, tranne gli slug riservati di
+ * WordPress (WMWP_DETAIL_RESERVED_SLUGS). Lo slug è il secondo gruppo.
+ *
+ * @param list<string> $bases
+ */
+function wmwp_detail_rewrite_regex( array $bases ): string {
+	$pattern = implode(
+		'|',
+		array_map(
+			function ( string $base ): string {
+				return preg_quote( $base, '#' );
+			},
+			$bases
+		)
+	);
+	return '^(' . $pattern . ')/(?!' . WMWP_DETAIL_RESERVED_SLUGS . '/?$)([^/]+)/?$';
 }
 
 /**
@@ -60,6 +84,45 @@ function wmwp_detail_url( string $type, int $id, string $lang ): string {
 	// La home senza filtri di lingua: il prefisso lo mette WPML per la lingua chiesta
 	$url = untrailingslashit( (string) get_option( 'home' ) ) . '/' . $path . '/';
 	return (string) apply_filters( 'wpml_permalink', $url, $lang );
+}
+
+/**
+ * Indirizzo del dettaglio per id, per il link della ricerca, che legge Elasticsearch dal vivo e quindi può mostrare un
+ * elemento che l'indice in cache non ha ancora, o un id che dopo un reset dello shard è passato a un altro elemento.
+ * Se l'id non è nell'indice, o la chiave stabile del suo JSON non è quella dell'indice, l'indice si ricostruisce una
+ * volta (se permesso) e si riprova; se ancora non torna, ''. Il JSON letto qui resta nella cache breve e serve alla
+ * pagina subito dopo. Con la fonte che non risponde si manda all'indirizzo dell'indice senza controllo.
+ */
+function wmwp_detail_url_by_id( string $type, int $id, string $lang ): string {
+	if ( $id <= 0 || ! in_array( $type, WMWP_DETAIL_TYPES, true ) ) {
+		return '';
+	}
+	$check = function () use ( $type, $id, $lang ): ?string {
+		$index = wmwp_detail_index();
+		$item  = $index['items'][ $type ][ $id ] ?? null;
+		if ( ! isset( $index['urls'][ $type ][ $id ] ) ) {
+			return null;
+		}
+		$known = (string) ( $item['source'] ?? '' );
+		if ( '' !== $known ) {
+			$feature = wmwp_detail_fetch( $type, $id );
+			if ( is_wp_error( $feature ) && 'wmwp_detail_not_found' === $feature->get_error_code() ) {
+				return null;
+			}
+			if ( ! is_wp_error( $feature ) ) {
+				$source = wmwp_detail_source( $type, (array) $feature['properties'] );
+				if ( '' !== $source && $source !== $known ) {
+					return null;
+				}
+			}
+		}
+		return wmwp_detail_url( $type, $id, $lang );
+	};
+	$url = $check();
+	if ( null === $url && wmwp_detail_rebuild_allowed() && null !== wmwp_detail_index( true ) ) {
+		$url = $check();
+	}
+	return (string) $url;
 }
 
 /**
@@ -87,12 +150,21 @@ function wmwp_detail_find( array $index, string $lang, string $path ): array {
 		}
 	}
 	// Lo stesso slug sotto un'altra base (la traccia ha cambiato route-type) o in un'altra lingua (indirizzo di prima che
-	// arrivasse la traduzione del nome), se un solo elemento ce l'ha
-	$slug    = substr( $path, (int) strrpos( $path, '/' ) );
+	// arrivasse la traduzione del nome), se un solo elemento ce l'ha. Solo fra i tipi che stanno sotto la base chiesta,
+	// quando l'indice ne ha: l'indirizzo vecchio di una traccia non deve portare a un POI con lo stesso slug
+	[ $base, $slug ] = wmwp_detail_split_path( $path );
+	$types           = [];
+	foreach ( $index['paths'] as $paths ) {
+		foreach ( $paths as $candidate => $item ) {
+			if ( 0 === strpos( $candidate, $base . '/' ) ) {
+				$types[ $item[0] ] = true;
+			}
+		}
+	}
 	$matches = [];
 	foreach ( array_unique( array_merge( [ $lang ], array_keys( $index['paths'] ) ) ) as $code ) {
 		foreach ( (array) ( $index['paths'][ $code ] ?? [] ) as $candidate => $item ) {
-			if ( substr( $candidate, -strlen( $slug ) ) === $slug ) {
+			if ( wmwp_detail_split_path( $candidate )[1] === $slug && ( ! $types || isset( $types[ $item[0] ] ) ) ) {
 				$matches[ $item[0] . ':' . $item[1] ] = $item;
 			}
 		}
@@ -103,9 +175,11 @@ function wmwp_detail_find( array $index, string $lang, string $path ): array {
 	$matches = array_values( $matches );
 	if ( 1 === count( $matches ) ) {
 		return [
-			'status' => 301,
-			'type'   => $matches[0][0],
-			'id'     => (int) $matches[0][1],
+			'status'   => 301,
+			'type'     => $matches[0][0],
+			'id'       => (int) $matches[0][1],
+			// Trovato per lo slug: può essere l'indice vecchio, il chiamante prova a ricostruirlo
+			'fallback' => true,
 		];
 	}
 	return [ 'status' => 404 ];
@@ -119,13 +193,14 @@ function wmwp_detail_find( array $index, string $lang, string $path ): array {
  * @return array{status: int, type?: string, id?: int, location?: string}
  */
 function wmwp_detail_resolve( string $lang, string $path ): array {
-	$path  = trim( strtolower( $path ), '/' );
+	$path  = wmwp_detail_normalize_path( $path );
 	$index = wmwp_detail_index();
 	if ( null === $index ) {
 		return [ 'status' => 503 ];
 	}
 	$result = wmwp_detail_find( $index, $lang, $path );
-	if ( 404 === $result['status'] && wmwp_detail_rebuild_allowed() ) {
+	// Anche il risultato del ripiego per slug può venire dall'indice vecchio (traccia che ha cambiato base): si ricostruisce
+	if ( ( 404 === $result['status'] || ! empty( $result['fallback'] ) ) && wmwp_detail_rebuild_allowed() ) {
 		$index  = wmwp_detail_index( true ) ?? $index;
 		$result = wmwp_detail_find( $index, $lang, $path );
 	}
@@ -151,18 +226,10 @@ add_action(
 	function () {
 		$bases = wmwp_detail_bases();
 		if ( $bases ) {
-			$pattern = implode(
-				'|',
-				array_map(
-					function ( string $base ): string {
-						return preg_quote( $base, '#' );
-					},
-					$bases
-				)
-			);
-			add_rewrite_rule( '^(' . $pattern . ')/([^/]+)/?$', 'index.php?wmwp_detail_path=$matches[1]/$matches[2]', 'top' );
+			add_rewrite_rule( wmwp_detail_rewrite_regex( $bases ), 'index.php?wmwp_detail_path=$matches[1]/$matches[2]', 'top' );
 		}
-		$signature = md5( wp_json_encode( [ $bases, WMWP_VERSION ] ) );
+		// Anche la regola stessa: una regola cambiata nel plugin rigenera le regole senza cambiare versione
+		$signature = md5( wp_json_encode( [ $bases ? wmwp_detail_rewrite_regex( $bases ) : '', WMWP_VERSION ] ) );
 		if ( get_option( WMWP_DETAIL_RULES_SIGNATURE ) !== $signature ) {
 			add_action(
 				'wp_loaded',
@@ -197,9 +264,9 @@ add_action(
 
 		$type = (string) get_query_var( 'wmwp_detail' );
 		if ( '' !== $type ) {
-			$url = in_array( $type, WMWP_DETAIL_TYPES, true ) ? wmwp_detail_url( $type, absint( get_query_var( 'wmwp_id' ) ), $lang ) : '';
+			$url = wmwp_detail_url_by_id( $type, absint( get_query_var( 'wmwp_id' ) ), $lang );
 			if ( '' !== $url ) {
-				wp_safe_redirect( $url, 301 );
+				wp_safe_redirect( $url, 302 );
 				exit;
 			}
 			$wp_query->set_404();
@@ -224,7 +291,7 @@ add_action(
 		}
 		$GLOBALS['wmwp_detail_resolved'] = $result + [
 			'lang' => $lang,
-			'path' => trim( strtolower( $path ), '/' ),
+			'path' => wmwp_detail_normalize_path( $path ),
 		];
 	},
 	1

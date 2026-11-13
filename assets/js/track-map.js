@@ -95,7 +95,8 @@
   // Con `url` il clic apre la scheda (`clickAction: 'link'` del componente). Una traccia con `ends` porta partenza e
   // arrivo (dopo le tracce, prima dei punti), come la mappa di GeoHub: `endpoint: 'start'|'end'` nelle properties, che
   // la mappa disegna (map/src/index.js); in un anello, con la fine entro 50 m dall'inizio, solo la partenza. Il cerchio è
-  // più grande di quello dei punti (raggio 12 contro 9): un punto di interesse sopra la partenza lascia vedere l'anello.
+  // grande quanto quello di GeoHub (raggio 15, circa 30 px) e più dei punti (raggio 9): un punto di interesse sopra la
+  // partenza lascia vedere un anello largo intorno (Seleni: la partenza è a 5 m dal POI 3).
   //   spec.tracks: [{ id, color, width, dash, context, label, tooltip, url, ends: { start, end } }]
   //   spec.points: [{ coordinates: [lon, lat], color, number, tooltip, url }]
   function detail(features, spec) {
@@ -179,7 +180,7 @@
       return {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [coordinates[0], coordinates[1]] },
-        properties: { endpoint: kind, tooltip: text(label), pointFillColor: kind === 'start' ? START : '#FFFFFF', pointStrokeColor: '#FFFFFF', pointStrokeWidth: 3, pointRadius: 12 }
+        properties: { endpoint: kind, tooltip: text(label), pointFillColor: kind === 'start' ? START : '#FFFFFF', pointStrokeColor: '#FFFFFF', pointStrokeWidth: 3, pointRadius: 15 }
       };
     };
     var out = [point(first, 'start', labels.start)];

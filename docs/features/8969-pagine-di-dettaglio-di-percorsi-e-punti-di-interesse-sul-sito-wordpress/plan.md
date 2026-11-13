@@ -7,7 +7,8 @@
 > branch senza istruzione esplicita di Rubens**: i commit qui sotto sono istruzioni per lui.
 
 **Stato al 13/11:** Task 1-8 fatti e verificati (suite `tests/php` e `tests/js`); i commit sono stati raggruppati in
-b7d5b9b e 6cdadc5 invece di uno per task. Il Task 9 (lavoro aggiunto dopo il piano) non è ancora committato.
+b7d5b9b e 6cdadc5 invece di uno per task. Il Task 9 (lavoro aggiunto dopo il piano) è in 4e03875; il Task 10
+(correzioni della review interna, approvata al secondo ciclo) è nel commit dopo 4e03875.
 
 **Obiettivo:** il plugin serve le pagine di dettaglio di EcTrack ed EcPoi di uno shard, senza post
 WordPress, con indirizzi `/<base>/<slug>/` per lingua, SEO, `hreflang` e sitemap, su qualsiasi tema.
@@ -205,7 +206,7 @@ di questo repo; la parte di Forestas e le decisioni stanno in
 - `request` filter: se esiste una pagina vera con quel percorso (`get_page_by_path`), si toglie
   `wmwp_detail_path` e WordPress serve la pagina.
 - `template_redirect` a priorità 1:
-  - con `wmwp_detail` + `wmwp_id`, 301 a `wmwp_detail_url()`, oppure 404;
+  - con `wmwp_detail` + `wmwp_id`, 302 a `wmwp_detail_url_by_id()` (review del 13/11), oppure 404;
   - con `wmwp_detail_path`, `wmwp_detail_resolve()` e, se serve, `wp_safe_redirect( …, 301 )`.
 
 - [x] **Passo 1: test che fallisce**, con l'indice delle fixture del Task 3:
@@ -313,8 +314,9 @@ di questo repo; la parte di Forestas e le decisioni stanno in
 
 **Interfacce:**
 - **WPML** (solo se `defined( 'ICL_SITEPRESS_VERSION' )`):
-  - `wpml_hreflangs`: sui dettagli restituisce `[ codice => wmwp_detail_url( type, id, lingua ) ]` più
-    `x-default` (lingua predefinita);
+  - `hreflang` stampati dal plugin in `wp_head` (`wmwp_detail_hreflangs()`): `[ tag => URL ]` più `x-default`
+    (lingua predefinita). Deviazione dal piano: il filtro `wpml_hreflangs` non basta, perché WPML stampa gli
+    `hreflang` solo per gli oggetti della query (i post);
   - `icl_ls_languages`: imposta `url` di ogni lingua con lo stesso URL.
 - **Sitemap:** `WMWP_Detail_Sitemap_Provider extends WP_Sitemaps_Provider`, con nome `wmwpdetail` e
   sottotipi `track` e `poi`. `get_url_list( $page, $subtype )` restituisce `[ 'loc' => URL ]` per ogni
@@ -373,4 +375,21 @@ Fatto con test scritti prima (TDD) e verificato in locale con il child di Forest
 - [x] `wmwp_webapp_url()` e campo «Webapp»: `tests/php/webapp-url.php`; traduzioni.
 - [x] Chiave stabile `wmwp_detail_source()`: controllo dell'elemento e suffisso dei doppioni, `tests/php/detail-index.php`
       e `detail-render.php`.
-- [ ] **Commit (istruzione per Rubens):** `feat(oc:8969): …` dei file cambiati dopo 6cdadc5, nello stesso branch.
+- [x] **Commit (istruzione per Rubens):** `feat(oc:8969): …` dei file cambiati dopo 6cdadc5, nello stesso branch
+      (4e03875).
+
+### Task 10: correzioni della review interna (13/11)
+
+Bloccanti e cleanup della review di wp-package, ciascuno con il test scritto prima.
+
+- [x] B1: l'indirizzo per id controlla l'elemento con la chiave stabile e ricostruisce l'indice se l'id è nuovo o
+      passato a un altro elemento (`wmwp_detail_url_by_id()`, `tests/php/detail-route.php` sezione 8), con un 302.
+- [x] B2: 404 della fonte → `wmwp_detail_not_found`, indice ricostruito e pagina 404 (o 301); 503 solo se la fonte non
+      risponde (`tests/php/detail-render.php` 4 e 4b).
+- [x] Cleanup: 301 dopo la ricostruzione, rinomina con la chiave stabile → 301, ripiego per slug con ricostruzione e solo
+      fra i tipi della base, indice letto una volta per richiesta, JSON non riscritto con il 304, ricostruzione ogni ora
+      con il cron, slug riservati e basi riservate, domini delle webapp in cache anche con GitHub giù, icone con
+      scadenza per voce, costanti, codice morto, helper comuni (`includes/http.php` con `wmwp_http_json()`,
+      `wmwp_detail_urls()`, `wmwp_detail_split_path()`), messaggi tradotti.
+- [x] Secondo ciclo della review: approvato, nessun bloccante.
+- [x] **Commit (istruzione per Rubens):** `fix(oc:8969): correzioni della review interna`, dopo 4e03875.

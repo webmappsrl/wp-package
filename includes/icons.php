@@ -64,6 +64,10 @@ function wmwp_icons_set(): ?array {
 /**
  * SVG di un'icona del set dello shard, decorativo (`aria-hidden`), con il colore del testo; '' se il nome non c'è o il
  * set non risponde. Il nome viene di solito da `icon_name` di un termine nel JSON dello shard.
+ *
+ * In cache (un transient con tutti i nomi già chiesti) ogni nome ha la sua scadenza: un giorno, un'ora se il set non
+ * rispondeva. Il set si scarica al massimo una volta per richiesta: se non risponde, gli altri nomi della stessa
+ * richiesta non riprovano.
  */
 function wmwp_icon_svg( string $name ): string {
 	static $set = false;
@@ -73,22 +77,20 @@ function wmwp_icon_svg( string $name ): string {
 	}
 	$cache = get_transient( WMWP_ICONS_CACHE_KEY );
 	$cache = is_array( $cache ) ? $cache : [];
-	if ( array_key_exists( $name, $cache ) ) {
-		return (string) $cache[ $name ];
+	$entry = $cache[ $name ] ?? null;
+	if ( is_array( $entry ) && (int) ( $entry['until'] ?? 0 ) > time() ) {
+		return (string) ( $entry['svg'] ?? '' );
 	}
-	// Il set scaricato resta in memoria per la richiesta; a cache vuota (scaduta o svuotata) si riscarica
-	if ( false === $set || [] === $cache ) {
+	// Il set scaricato resta in memoria per la richiesta; si riscarica solo se la cache non ha nessuna voce valida
+	// (scaduta o svuotata). Se non ha risposto, la voce '' appena scritta basta agli altri nomi della richiesta per
+	// non riprovare
+	$now   = time();
+	$valid = array_filter( $cache, fn( $e ) => is_array( $e ) && (int) ( $e['until'] ?? 0 ) > $now );
+	if ( false === $set || ! $valid ) {
 		$set = wmwp_icons_set();
 	}
-	if ( null === $set ) {
-		// Set che non risponde: niente icona, si riprova al più presto fra un'ora
-		$cache[ $name ] = '';
-		set_transient( WMWP_ICONS_CACHE_KEY, $cache, HOUR_IN_SECONDS );
-		$set = false;
-		return '';
-	}
 	$svg = '';
-	if ( isset( $set[ $name ] ) ) {
+	if ( is_array( $set ) && isset( $set[ $name ] ) ) {
 		$size = (int) $set[ $name ]['size'];
 		$svg  = '<svg class="wmwp-icon" viewBox="0 0 ' . $size . ' ' . $size . '" fill="currentColor" aria-hidden="true" focusable="false">';
 		foreach ( $set[ $name ]['paths'] as $path ) {
@@ -96,7 +98,12 @@ function wmwp_icon_svg( string $name ): string {
 		}
 		$svg .= '</svg>';
 	}
-	$cache[ $name ] = $svg;
+	// Voci scadute fuori, così il transient non cresce con nomi che nessuno chiede più
+	$cache          = $valid;
+	$cache[ $name ] = [
+		'svg'   => $svg,
+		'until' => $now + ( null === $set ? HOUR_IN_SECONDS : DAY_IN_SECONDS ),
+	];
 	set_transient( WMWP_ICONS_CACHE_KEY, $cache, DAY_IN_SECONDS );
 	return $svg;
 }
