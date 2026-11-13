@@ -258,7 +258,8 @@ colore della linea.
 
 Ogni traccia e ogni POI dello shard ha una pagina, senza post in WordPress: l'indirizzo `/<base>/<slug>/` (con WPML
 `/en/<base>/<slug>/`) si risolve con un indice costruito dalla lista delle tracce dell'API Elasticsearch e da
-`pois.geojson`, e il JSON del dettaglio si legge con una **cache breve di 60 secondi** (oc:8969):
+`pois.geojson`, e il JSON del dettaglio si legge con una **cache breve di 60 secondi** (oc:8969; il perché delle
+scelte e la loro storia in [docs/knowledge/8969-…](docs/knowledge/8969-pagine-di-dettaglio-di-percorsi-e-punti-di-interesse-sul-sito-wordpress.md)):
 
 - **traccia**: il file pubblicato dallo shard, `<awsApi>/tracks/<id>.json`, con l'`awsApi` che `environment.ts` dà
   per lo shard scelto. Il plugin non distingue gli ambienti: qualunque cosa ci sia dietro quell'indirizzo (S3, o il
@@ -269,7 +270,7 @@ Ogni traccia e ogni POI dello shard ha una pagina, senza post in WordPress: l'in
 - **POI**: `api/ec/poi/<id>` dello shard, che costruisce il dettaglio a ogni chiamata (un file per POI non esiste).
 
 Una modifica nel backend si vede entro un minuto. La durata si cambia con il filtro `wmwp_detail_cache_ttl` (0 spegne la
-cache); il JSON resta salvato un giorno per la richiesta condizionale, gli errori non vanno in cache, e un JSON in cache
+cache); il JSON resta salvato 6 ore per la richiesta condizionale, gli errori non vanno in cache, e un JSON in cache
 che non torna più con l'indirizzo (rinomina) si rilegge subito. `aws_api` si può cambiare con il filtro
 `wmwp_api_urls`, come gli altri indirizzi, e lo usa solo il server.
 
