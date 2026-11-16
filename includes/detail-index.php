@@ -4,8 +4,8 @@
  *
  * Le pagine non sono post: un indirizzo `/<base>/<slug>/` si risolve con un indice `percorso → elemento` per lingua,
  * costruito dalla lista delle tracce dell'API Elasticsearch e da `pois.geojson` dello shard. Lo slug viene dal nome
- * (`sanitize_title`), così al backend non serve niente; i doppioni nella stessa base e lingua prendono `-<fonte>`, la
- * chiave stabile dell'elemento (`wmwp_detail_source()`), o `-<id>` se non ce l'hanno.
+ * (`sanitize_title`), così al backend non serve niente; fra i doppioni nella stessa base e lingua chi ha già il percorso
+ * lo tiene e gli altri prendono `-2`, `-3`… in ordine di chiave (`includes/detail-history.php`, oc:8983).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -87,68 +87,170 @@ function wmwp_detail_languages(): array {
 /**
  * Indice dei dettagli.
  *
+ * I percorsi si assegnano per lingua in tre passate, con gli elementi in ordine di chiave (wmwp_detail_key_compare(),
+ * poi tipo e id), così il risultato non dipende dall'ordine in cui arrivano dall'API (oc:8983):
+ * 1. ogni elemento tiene il percorso che lo storico segna come suo attuale, se la base e lo slug del nome sono ancora
+ *    quelli da cui è nato;
+ * 2. gli altri prendono `<base>/<slug>`, se è libero;
+ * 3. i rimasti prendono il primo `<base>/<slug>-<n>` libero, con `n` da 2.
+ * «Libero» vuol dire non assegnato in questo giro e non dato nello storico a un altro elemento che c'è ancora: un
+ * percorso resta dell'elemento a cui è stato dato finché quell'elemento esiste.
+ *
  * @param list<array{type: string, id: int, names: mixed, kind: ?array, source?: ?string}> $items Elementi: tipo
  *        (`track` o `poi`), id, nomi per lingua, nomi per lingua del loro tipo (`route-type` o `poi-type`, null se
  *        non ce l'hanno) e chiave stabile (`wmwp_detail_source()`, se c'è).
  * @param callable                                                     $base  function( string $type, ?array $kind, string $lang ): string
  * @param list<string>|null                                            $langs Lingue; null = wmwp_detail_languages().
- * @return array{langs: list<string>, paths: array<string, array<string, array{0: string, 1: int}>>, urls: array<string, array<int, array<string, string>>>, count: int}
+ * @param array<string, array<string, array{type: string, key: string, base: string, root: string, suffix: int, current: bool}>> $history
+ *        Storico dei percorsi, lingua → percorso → riga (wmwp_detail_history_load()); vuoto = nessuno storico.
+ * @param list<array{lang: string, path: string, type: string, id: int, key: string, base: string, root: string, suffix: int}>|null $assignments
+ *        In uscita, un elemento per percorso assegnato (`suffix` 0 = senza suffisso): serve ad aggiornare lo storico.
+ * @return array{langs: list<string>, paths: array<string, array<string, array{0: string, 1: int}>>, urls: array<string, array<int, array<string, string>>>, items: array<string, array<int, array{names: mixed, source: ?string}>>, suffixes?: array<string, array<int, array<string, int>>>, counts: array<string, int>, count: int}
  */
-function wmwp_detail_build_index( array $items, callable $base, ?array $langs = null ): array {
-	$langs = null === $langs ? wmwp_detail_languages() : array_values( $langs );
+function wmwp_detail_build_index( array $items, callable $base, ?array $langs = null, array $history = [], ?array &$assignments = null ): array {
+	$langs       = null === $langs ? wmwp_detail_languages() : array_values( $langs );
+	$assignments = [];
+	// `suffixes` c'è sempre, anche vuoto: dice che l'indice è della 0.3.0 (wmwp_detail_slug_matches())
 	$index = [
-		'langs' => $langs,
-		'paths' => [],
-		'urls'  => [],
-		'items' => [],
-		'count' => 0,
+		'langs'    => $langs,
+		'paths'    => [],
+		'urls'     => [],
+		'items'    => [],
+		'suffixes' => [],
+		'count'    => 0,
 	];
+	// Una chiave della fonte ripetuta (due elementi con lo stesso nid) resta all'id più basso: gli altri elementi sono
+	// riconosciuti dall'id, altrimenti i due si contenderebbero lo stesso proprietario e i percorsi si scambierebbero
+	$owners = [];
+	foreach ( $items as $item ) {
+		$source = trim( (string) ( $item['source'] ?? '' ) );
+		$slot   = (string) $item['type'] . '|' . $source;
+		if ( '' !== $source && ( ! isset( $owners[ $slot ] ) || (int) $item['id'] < $owners[ $slot ] ) ) {
+			$owners[ $slot ] = (int) $item['id'];
+		}
+	}
+	$source_of = function ( array $item ) use ( $owners ): ?string {
+		$source = trim( (string) ( $item['source'] ?? '' ) );
+		return '' !== $source && ( $owners[ (string) $item['type'] . '|' . $source ] ?? null ) === (int) $item['id'] ? $source : null;
+	};
 	// Nomi e chiave stabile: il dettaglio di un POI non ha il nome, e per controllare che l'id porti ancora allo stesso
 	// elemento serve un dato che non cambia con il reset degli id
 	foreach ( $items as $item ) {
 		$index['items'][ (string) $item['type'] ][ (int) $item['id'] ] = [
 			'names'  => $item['names'] ?? null,
-			'source' => isset( $item['source'] ) && '' !== (string) $item['source'] ? (string) $item['source'] : null,
+			'source' => $source_of( $item ),
 		];
 	}
 
-	foreach ( $langs as $lang ) {
-		// Prima passata: base e slug di ogni elemento; si contano gli slug per base
-		$planned = [];
-		$used    = [];
-		foreach ( $items as $item ) {
-			$type = (string) $item['type'];
-			$id   = (int) $item['id'];
-			$kind = isset( $item['kind'] ) && is_array( $item['kind'] ) ? $item['kind'] : null;
-			$path = $base( $type, $kind, $lang ) . '/' . wmwp_detail_slug( wmwp_detail_text( $item['names'] ?? null, $lang ), $id );
-
-			$source = isset( $item['source'] ) ? sanitize_title( (string) $item['source'] ) : '';
-
-			$planned[]      = [ $type, $id, $path, '' !== $source ? $source : (string) $id ];
-			$used[ $path ] = ( $used[ $path ] ?? 0 ) + 1;
+	// Elementi in ordine di chiave, poi tipo e id: l'ordine totale rende le passate uguali a ogni giro
+	$entries = [];
+	$present = [];
+	foreach ( $items as $item ) {
+		$type      = (string) $item['type'];
+		$id        = (int) $item['id'];
+		$key       = wmwp_detail_item_key( $source_of( $item ), $id );
+		$entries[] = [
+			'type'  => $type,
+			'id'    => $id,
+			'key'   => $key,
+			'owner' => $type . '|' . $key,
+			'names' => $item['names'] ?? null,
+			'kind'  => isset( $item['kind'] ) && is_array( $item['kind'] ) ? $item['kind'] : null,
+		];
+		$present[ $type . '|' . $key ] = true;
+	}
+	usort(
+		$entries,
+		function ( array $a, array $b ): int {
+			return wmwp_detail_key_compare( $a['key'], $b['key'] ) ?: strcmp( $a['type'], $b['type'] ) ?: $a['id'] <=> $b['id'];
 		}
-		// Seconda passata: prima gli slug unici, poi i doppioni con -<fonte> (stabile fra un reset e l'altro) o -<id>; se
-		// anche quello è preso (un altro elemento si chiama «Foo 5») si aggiunge un numero, così un percorso porta sempre a
-		// un elemento solo
-		$assigned = [];
-		foreach ( $planned as [ $type, $id, $path ] ) {
-			if ( 1 === $used[ $path ] ) {
-				$assigned[ $path ] = [ $type, $id ];
+	);
+
+	foreach ( $langs as $lang ) {
+		$rows = (array) ( $history[ $lang ] ?? [] );
+		// Percorso attuale di ogni elemento secondo lo storico
+		$current = [];
+		foreach ( $rows as $path => $row ) {
+			if ( ! empty( $row['current'] ) ) {
+				$current[ $row['type'] . '|' . $row['key'] ] = [ (string) $path, $row ];
 			}
 		}
-		foreach ( $planned as [ $type, $id, $path, $suffix ] ) {
-			if ( 1 === $used[ $path ] ) {
+		// Un percorso dato nello storico a un altro elemento che c'è ancora non si può prendere
+		$taken = function ( string $path, string $owner ) use ( $rows, $present ): bool {
+			$row = $rows[ $path ] ?? null;
+			if ( null === $row ) {
+				return false;
+			}
+			$holder = $row['type'] . '|' . $row['key'];
+			return $holder !== $owner && isset( $present[ $holder ] );
+		};
+
+		$planned  = [];
+		$assigned = [];
+		$result   = [];
+		foreach ( $entries as $n => $entry ) {
+			$planned[ $n ] = [
+				$base( $entry['type'], $entry['kind'], $lang ),
+				wmwp_detail_slug( wmwp_detail_text( $entry['names'], $lang ), $entry['id'] ),
+			];
+		}
+		// 1. Il percorso attuale dello storico, se nasce ancora dalla stessa base e dallo stesso slug
+		foreach ( $entries as $n => $entry ) {
+			if ( ! isset( $current[ $entry['owner'] ] ) ) {
 				continue;
 			}
-			$candidate = $path . '-' . $suffix;
-			for ( $n = 2; isset( $assigned[ $candidate ] ); $n++ ) {
-				$candidate = $path . '-' . $suffix . '-' . $n;
+			[ $path, $row ] = $current[ $entry['owner'] ];
+			[ $b, $r ]      = $planned[ $n ];
+			$suffix         = (int) $row['suffix'];
+			if ( (string) $row['base'] === $b && (string) $row['root'] === $r && $path === $b . '/' . $r . ( $suffix > 0 ? '-' . $suffix : '' ) && ! isset( $assigned[ $path ] ) ) {
+				$assigned[ $path ] = true;
+				$result[ $n ]      = [ $path, $suffix ];
 			}
-			$assigned[ $candidate ] = [ $type, $id ];
 		}
-		foreach ( $assigned as $path => [ $type, $id ] ) {
-			$index['paths'][ $lang ][ $path ]       = [ $type, $id ];
-			$index['urls'][ $type ][ $id ][ $lang ] = $path;
+		// 2. Lo slug senza suffisso, se è libero
+		foreach ( $entries as $n => $entry ) {
+			[ $b, $r ] = $planned[ $n ];
+			$path      = $b . '/' . $r;
+			if ( ! isset( $result[ $n ] ) && ! isset( $assigned[ $path ] ) && ! $taken( $path, $entry['owner'] ) ) {
+				$assigned[ $path ] = true;
+				$result[ $n ]      = [ $path, 0 ];
+			}
+		}
+		// 3. Il primo suffisso libero da 2: un percorso porta sempre a un elemento solo, anche se un altro elemento si
+		// chiama «Foo 2»
+		foreach ( $entries as $n => $entry ) {
+			if ( isset( $result[ $n ] ) ) {
+				continue;
+			}
+			[ $b, $r ] = $planned[ $n ];
+			$suffix    = 2;
+			while ( isset( $assigned[ $b . '/' . $r . '-' . $suffix ] ) || $taken( $b . '/' . $r . '-' . $suffix, $entry['owner'] ) ) {
+				++$suffix;
+			}
+			$path              = $b . '/' . $r . '-' . $suffix;
+			$assigned[ $path ] = true;
+			$result[ $n ]      = [ $path, $suffix ];
+		}
+
+		ksort( $result );
+		foreach ( $result as $n => [ $path, $suffix ] ) {
+			$entry = $entries[ $n ];
+			$index['paths'][ $lang ][ $path ]                         = [ $entry['type'], $entry['id'] ];
+			$index['urls'][ $entry['type'] ][ $entry['id'] ][ $lang ] = $path;
+			// Il suffisso dato all'elemento, solo se c'è: wmwp_detail_slug_matches() accetta quello e nessun altro
+			if ( $suffix > 0 ) {
+				$index['suffixes'][ $entry['type'] ][ $entry['id'] ][ $lang ] = $suffix;
+			}
+			$assignments[] = [
+				'lang'   => $lang,
+				'path'   => $path,
+				'type'   => $entry['type'],
+				'id'     => $entry['id'],
+				'key'    => $entry['key'],
+				'base'   => $planned[ $n ][0],
+				'root'   => $planned[ $n ][1],
+				'suffix' => $suffix,
+			];
 		}
 	}
 
@@ -296,48 +398,108 @@ add_action( 'deleted_transient', 'wmwp_detail_index_forget' );
  * Indice dei dettagli: dalla cache (WMWP_DETAIL_INDEX_TTL), o ricostruito dallo shard. Con `$rebuild` si ricostruisce
  * anche se la cache c'è, ma non più di una volta ogni WMWP_DETAIL_REBUILD_INTERVAL secondi. Un indice nuovo vuoto non
  * si salva; uno in cui un tipo cala sotto WMWP_DETAIL_REJECT_RATIO del precedente (lista a metà durante una
- * reindicizzazione) si scarta per WMWP_DETAIL_MAX_REJECTS volte di fila, e alla volta dopo si accetta. Null solo se
- * non c'è mai stato un indice e lo shard non risponde.
+ * reindicizzazione) si scarta per WMWP_DETAIL_MAX_REJECTS volte di fila, e alla volta dopo si accetta; uno in cui la
+ * chiave della fonte crolla (API cambiate) si scarta sempre. Lo storico dei percorsi (oc:8983) entra nella costruzione
+ * e si scrive solo con un indice accettato: i percorsi nuovi, al primo giro quelli dell'indice esistente, e quando lo
+ * shard risulta svuotato e ricaricato si dimenticano le righe registrate con l'id. I controlli usano l'ultimo indice
+ * anche se nel frattempo è cambiata la configurazione delle basi. Null solo se non c'è mai stato un indice e lo shard
+ * non risponde.
  *
- * @return array{langs: list<string>, paths: array, urls: array, count: int}|null
+ * @return array{langs: list<string>, paths: array, urls: array, items: array, counts: array<string, int>, count: int, config: string}|null
  */
 function wmwp_detail_index( bool $rebuild = false ): ?array {
 	$cached = wmwp_detail_index_cached();
-	// Un indice costruito con altre basi (impostazioni, tema o pagina base rinominata) non vale più: si ricostruisce
+	// Un indice costruito con altre basi (impostazioni, tema o pagina base rinominata) non vale più: si ricostruisce.
+	// L'ultimo indice buono resta, perché i controlli sugli elementi non dipendono dalle basi
 	$config = wmwp_detail_base_signature();
 	if ( null !== $cached && ( $cached['config'] ?? '' ) !== $config ) {
 		delete_transient( WMWP_DETAIL_INDEX_KEY );
-		delete_option( WMWP_DETAIL_INDEX_LAST );
 		delete_option( WMWP_DETAIL_REBUILT_AT );
 		$cached = null;
 	}
 	if ( null !== $cached && ! $rebuild ) {
 		return $cached;
 	}
-	$last = $cached ?? get_option( WMWP_DETAIL_INDEX_LAST, null );
-	$last = is_array( $last ) && ( $last['config'] ?? '' ) === $config ? $last : null;
+	$stored = $cached ?? get_option( WMWP_DETAIL_INDEX_LAST, null );
+	$guard  = is_array( $stored ) ? $stored : null;
+	$last   = null !== $guard && ( $guard['config'] ?? '' ) === $config ? $guard : null;
 	// Un tentativo ogni WMWP_DETAIL_REBUILD_INTERVAL secondi al massimo, riuscito o no: con lo shard giù non si
 	// richiama a ogni richiesta del sito
+	// Senza un indice con questa configurazione (basi appena cambiate) si risponde con l'ultimo indice buono, come quando
+	// la ricostruzione si scarta: le pagine restano raggiungibili con le basi vecchie, ancora nelle regole di rewrite
 	if ( ! wmwp_detail_rebuild_allowed() || get_transient( WMWP_DETAIL_INDEX_LOCK ) ) {
-		return $last;
+		return $last ?? $guard;
 	}
 	set_transient( WMWP_DETAIL_INDEX_LOCK, 1, WMWP_DETAIL_LOCK_TTL );
 	update_option( WMWP_DETAIL_REBUILT_AT, time(), false );
+	try {
+		$index = wmwp_detail_index_rebuild( $guard, $config );
+	} finally {
+		delete_transient( WMWP_DETAIL_INDEX_LOCK );
+	}
+	return $index ?? $last ?? $guard;
+}
 
+/**
+ * Una ricostruzione dell'indice, con il lock già preso da wmwp_detail_index(): l'indice nuovo, salvato insieme allo
+ * storico, o null se si scarta (shard giù, chiave crollata, storico illeggibile, indice vuoto o a metà).
+ *
+ * @param array<string, mixed>|null $guard  Ultimo indice buono, anche con un'altra configurazione delle basi.
+ * @param string                    $config Impronta della configurazione delle basi.
+ * @return array<string, mixed>|null
+ */
+function wmwp_detail_index_rebuild( ?array $guard, string $config ): ?array {
 	$items = wmwp_detail_fetch_items();
-	$index = null === $items ? null : wmwp_detail_build_index( $items, 'wmwp_detail_base' );
-	delete_transient( WMWP_DETAIL_INDEX_LOCK );
-	if ( null === $index || 0 === $index['count'] ) {
-		return $last;
+	if ( null === $items ) {
+		return null;
+	}
+	// La chiave della fonte crollata vuol dire API cambiate: l'indice si scarta sempre, non solo per due volte come il
+	// calo degli elementi, perché accettarlo riscriverebbe lo storico (oc:8983)
+	if ( wmwp_detail_keys_collapsed( $guard, $items ) ) {
+		error_log( '[wp-package] indice dei dettagli scartato: la chiave della fonte è crollata (' . wp_json_encode( wmwp_detail_count_sources( $items ) ) . ')' );
+		return null;
+	}
+	$history = wmwp_detail_history_load();
+	// Storico che c'è ma non si legge: un indice costruito senza riassegnerebbe i percorsi, resta quello di prima
+	if ( null === $history ) {
+		return null;
+	}
+	// Primo giro con lo storico: i percorsi dell'indice esistente entrano nello storico prima di ricalcolarli. Qui solo
+	// in memoria: si scrivono con l'indice, se viene accettato
+	$seed = [];
+	if ( get_option( WMWP_DETAIL_PATHS_SEED_OPTION, 0 ) && null !== $guard ) {
+		foreach ( wmwp_detail_history_seed_rows( $guard ) as $row ) {
+			if ( ! isset( $history[ $row['lang'] ][ $row['path'] ] ) ) {
+				$seed[]                                     = $row;
+				$history[ $row['lang'] ][ $row['path'] ] = array_diff_key( $row, [ 'lang' => 0, 'path' => 0 ] );
+			}
+		}
+	}
+	// Shard svuotato e ricaricato: gli id delle righe registrate con l'id ora sono di altri elementi. Anche questo solo
+	// in memoria fino all'accettazione
+	$renumbered = wmwp_detail_shard_renumbered( $guard, $items );
+	foreach ( $renumbered as $type ) {
+		foreach ( $history as $lang => $rows ) {
+			foreach ( $rows as $path => $row ) {
+				if ( $type === $row['type'] && 0 === strpos( $row['key'], 'i:' ) ) {
+					unset( $history[ $lang ][ $path ] );
+				}
+			}
+		}
 	}
 
+	$assignments = null;
+	$index       = wmwp_detail_build_index( $items, 'wmwp_detail_base', null, $history, $assignments );
+	if ( 0 === $index['count'] ) {
+		return null;
+	}
 	$rejects = (int) get_option( WMWP_DETAIL_REJECTS_OPTION, 0 );
 	foreach ( WMWP_DETAIL_TYPES as $type ) {
-		$before = (int) ( $last['counts'][ $type ] ?? 0 );
+		$before = (int) ( $guard['counts'][ $type ] ?? 0 );
 		if ( $before > 0 && $index['counts'][ $type ] < WMWP_DETAIL_REJECT_RATIO * $before && $rejects < WMWP_DETAIL_MAX_REJECTS ) {
 			update_option( WMWP_DETAIL_REJECTS_OPTION, $rejects + 1, false );
 			error_log( sprintf( '[wp-package] indice dei dettagli scartato: %s %d contro %d', $type, $index['counts'][ $type ], $before ) );
-			return $last;
+			return null;
 		}
 	}
 	delete_option( WMWP_DETAIL_REJECTS_OPTION );
@@ -345,8 +507,17 @@ function wmwp_detail_index( bool $rebuild = false ): ?array {
 	$index['config'] = $config;
 	set_transient( WMWP_DETAIL_INDEX_KEY, $index, WMWP_DETAIL_INDEX_TTL );
 	update_option( WMWP_DETAIL_INDEX_LAST, $index, false );
+	// Solo con un indice accettato lo storico cambia: righe con l'id dimenticate, primo giro, percorsi nuovi (si
+	// scrivono solo le righe che cambiano). L'option del primo giro si toglie solo se la scrittura è riuscita
+	foreach ( $renumbered as $type ) {
+		wmwp_detail_history_forget_ids( $type );
+	}
+	$written = wmwp_detail_history_write( $seed ) && wmwp_detail_history_write( wmwp_detail_history_changes( $history, (array) $assignments ) );
+	if ( $written && get_option( WMWP_DETAIL_PATHS_SEED_OPTION, 0 ) ) {
+		delete_option( WMWP_DETAIL_PATHS_SEED_OPTION );
+	}
 	// Le basi in un'opzione piccola caricata sempre: le regole di rewrite (init) non leggono l'indice intero
-	update_option( WMWP_DETAIL_BASES_OPTION, wmwp_detail_index_bases( $index ), true );
+	update_option( WMWP_DETAIL_BASES_OPTION, wmwp_detail_rule_bases( $index ), true );
 	return $index;
 }
 

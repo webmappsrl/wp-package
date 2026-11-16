@@ -10,6 +10,7 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+require __DIR__ . '/history-sandbox.php';
 
 $failures = [];
 $check    = function ( bool $ok, string $what ) use ( &$failures ) {
@@ -71,6 +72,44 @@ $check( 404 === $r['status'], 'slug di un POI sotto la base delle tracce → 404
 // 4. Sconosciuto → 404
 $r = wmwp_detail_resolve( 'it', 'sentiero/inventato' );
 $check( 404 === $r['status'], 'percorso sconosciuto → 404' );
+
+// 4b. Storico dei percorsi (oc:8983), nella tabella della sandbox: un percorso che l'indice non ha più porta
+// all'elemento a cui è stato dato, prima dell'altra lingua e del ripiego per slug
+$storico = function ( string $lang, string $path, string $type, string $key ) {
+	[ $base_path, $slug_path ] = wmwp_detail_split_path( $path );
+	wmwp_detail_history_write( [ [ 'lang' => $lang, 'path' => $path, 'type' => $type, 'key' => $key, 'base' => $base_path, 'root' => $slug_path, 'suffix' => 0, 'current' => false ] ] );
+};
+$storico( 'it', 'sentiero/vecchio', 'track', 'i:5' );
+$r = wmwp_detail_resolve( 'it', 'sentiero/vecchio' );
+$check( 301 === $r['status'] && ( $r['location'] ?? '' ) === wmwp_detail_url( 'track', 5, 'it' ), 'storico: percorso vecchio → 301 all\'indirizzo attuale (' . ( $r['location'] ?? '' ) . ')' );
+// Senza storico il ripiego per slug manderebbe alla traccia «Salita»: lo storico dice che era di un elemento sparito
+$storico( 'it', 'cammino/salita', 'track', 's:999' );
+$r = wmwp_detail_resolve( 'it', 'cammino/salita' );
+$check( 404 === $r['status'], 'storico: elemento che non c\'è più → 404, non il ripiego per slug' );
+// Una riga registrata con l'id vale solo se quell'id è ancora di un elemento senza chiave della fonte
+$storico( 'it', 'sentiero/prova', 'poi', 'i:9' );
+$r = wmwp_detail_resolve( 'it', 'sentiero/prova' );
+$check( 301 === $r['status'] && ( $r['location'] ?? '' ) === wmwp_detail_url( 'poi', 9, 'it' ), 'storico: riga con l\'id → 301' );
+if ( null === $en ) {
+	echo "SKIP: storico prima dell'altra lingua (nessuna lingua inglese attiva)\n";
+} else {
+	$storico( 'it', 'trail/climb', 'poi', 'i:9' );
+	$r = wmwp_detail_resolve( 'it', 'trail/climb' );
+	$check( 301 === $r['status'] && ( $r['location'] ?? '' ) === wmwp_detail_url( 'poi', 9, 'it' ), 'storico prima dell\'altra lingua (' . ( $r['location'] ?? '' ) . ')' );
+}
+// Ripiego per slug sotto una base che l'indice non ha più ma lo storico sì: i tipi della base vengono dallo storico,
+// quindi l'indirizzo vecchio di una traccia non porta a un POI con lo stesso slug
+$r = wmwp_detail_resolve( 'it', 'cammino/nuraghe' );
+$check( 404 === $r['status'], 'base nota solo allo storico: il ripiego non porta a un POI (' . ( $r['location'] ?? $r['status'] ) . ')' );
+if ( function_exists( 'wmwp_detail_index_id_for_key' ) ) {
+	$check( 5 === wmwp_detail_index_id_for_key( [ 'items' => [ 'track' => [ 5 => [ 'names' => null, 'source' => ' 4076 ' ] ] ] ], 'track', 's:4076' ), 'id dalla chiave con spazi ai lati' );
+	$con_fonte = [ 'items' => [ 'track' => [ 5 => [ 'names' => null, 'source' => '4076' ], 6 => [ 'names' => null, 'source' => null ] ] ] ];
+	$check( 5 === wmwp_detail_index_id_for_key( $con_fonte, 'track', 's:4076' ) && 6 === wmwp_detail_index_id_for_key( $con_fonte, 'track', 'i:6' ), 'id dalla chiave' );
+	$check( null === wmwp_detail_index_id_for_key( $con_fonte, 'track', 'i:5' ), 'riga con l\'id di un elemento che ora ha la chiave della fonte → nessuno' );
+	$check( null === wmwp_detail_index_id_for_key( $con_fonte, 'poi', 's:4076' ), 'stessa chiave, altro tipo → nessuno' );
+} else {
+	$check( false, 'wmwp_detail_index_id_for_key non esiste' );
+}
 
 // 5. Indirizzo per id
 $check( '/sentiero/salita/' === substr( wmwp_detail_url( 'track', 5, 'it' ), -17 ), 'wmwp_detail_url italiano' );
