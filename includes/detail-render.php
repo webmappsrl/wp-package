@@ -125,8 +125,11 @@ function wmwp_detail_fetch_file( string $url, ?array $cached ): ?array {
 }
 
 /**
- * Lo slug richiesto è quello del nome nel JSON, con o senza il suffisso dei doppioni (`-<chiave stabile>` dell'indice o
- * `-<id>`, e un numero in più se anche quello era preso)? Null se il JSON non ha il nome (il dettaglio di un POI).
+ * Lo slug richiesto è quello del nome nel JSON, con o senza il suffisso dei doppioni? Il suffisso accettato è quello che
+ * l'indice ha dato all'elemento in quella lingua (`-2`, `-3`…, oc:8983), non un `-<n>` qualunque: un elemento rinominato
+ * da «Foo 3» a «Foo» non resta servito su `foo-3`. Quelli della 0.2.0, `-<chiave stabile>` dell'indice o `-<id>` con un
+ * numero in più se anche quello era preso, valgono ancora per gli indirizzi rimasti in cache. Null se il JSON non ha il
+ * nome (il dettaglio di un POI).
  *
  * @param array<string, mixed> $resolved Risultato di wmwp_detail_resolve() con lang e path.
  * @param array<string, mixed> $props    `properties` del JSON.
@@ -138,8 +141,15 @@ function wmwp_detail_slug_matches( array $resolved, array $props, string $known 
 	}
 	$requested = wmwp_detail_split_path( (string) $resolved['path'] )[1];
 	$expected  = wmwp_detail_slug( $name, (int) $resolved['id'] );
-	if ( $requested === $expected ) {
+	$index  = wmwp_detail_index();
+	$suffix = (int) ( $index['suffixes'][ (string) ( $resolved['type'] ?? '' ) ][ (int) $resolved['id'] ][ (string) $resolved['lang'] ] ?? 0 );
+	if ( $requested === $expected || ( $suffix > 0 && $requested === $expected . '-' . $suffix ) ) {
 		return true;
+	}
+	// Le forme della 0.2.0 solo con un indice della 0.2.0 ancora in cache (senza `suffixes`): con un indice 0.3.0
+	// accetterebbero `foo-3` per un elemento con id o chiave 3 rinominato da «Foo 3» a «Foo»
+	if ( isset( $index['suffixes'] ) ) {
+		return false;
 	}
 	foreach ( array_filter( [ sanitize_title( $known ), (string) (int) $resolved['id'] ] ) as $suffix ) {
 		if ( $requested === $expected . '-' . $suffix || 0 === strpos( $requested, $expected . '-' . $suffix . '-' ) ) {

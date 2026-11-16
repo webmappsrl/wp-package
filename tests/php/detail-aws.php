@@ -11,6 +11,7 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+require __DIR__ . '/history-sandbox.php';
 
 $failures = [];
 $check    = function ( bool $ok, string $what ) use ( &$failures ) {
