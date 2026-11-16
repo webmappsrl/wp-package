@@ -11,6 +11,7 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+require __DIR__ . '/history-sandbox.php';
 
 $failures = [];
 $check    = function ( bool $ok, string $what ) use ( &$failures ) {
@@ -104,6 +105,49 @@ $poi   = [
 // 1. Traccia con il nome giusto
 $detail = wmwp_detail_load( $track );
 $check( is_array( $detail ) && 5 === $detail['id'] && 'Salita' === $detail['name'], 'traccia valida' );
+
+// 1b. Doppioni della 0.3.0 (oc:8983): il suffisso accettato è quello che l'indice ha dato all'elemento. Una traccia
+// senza chiave della fonte su `-2` ha la sua pagina; una con la chiave non fa ricostruire l'indice al visitatore
+$indice_render = get_transient( 'wmwp_detail_index' );
+$base_render   = function ( string $type, ?array $kind, string $lang ): string {
+	$name = null === $kind ? '' : wmwp_detail_text( $kind, $lang );
+	return '' !== $name ? sanitize_title( $name ) : ( 'poi' === $type ? 'poi' : 'track' );
+};
+$con_doppi     = wmwp_detail_build_index(
+	[
+		[ 'type' => 'track', 'id' => 4, 'names' => [ 'it' => 'Salita' ], 'kind' => [ 'it' => 'Sentiero' ] ],
+		[ 'type' => 'track', 'id' => 5, 'names' => [ 'it' => 'Salita' ], 'kind' => [ 'it' => 'Sentiero' ] ],
+		[ 'type' => 'track', 'id' => 3, 'names' => [ 'it' => 'Discesa' ], 'kind' => [ 'it' => 'Sentiero' ], 'source' => 'T-1' ],
+		[ 'type' => 'track', 'id' => 6, 'names' => [ 'it' => 'Discesa' ], 'kind' => [ 'it' => 'Sentiero' ], 'source' => 'T-6' ],
+		[ 'type' => 'track', 'id' => 7, 'names' => [ 'it' => 'Foo 3' ], 'kind' => [ 'it' => 'Sentiero' ] ],
+		[ 'type' => 'poi', 'id' => 9, 'names' => [ 'it' => 'Nuraghe' ], 'kind' => null, 'source' => 'D-77' ],
+	],
+	$base_render,
+	[ 'it' ]
+);
+$con_doppi['config'] = wmwp_detail_base_signature();
+set_transient( 'wmwp_detail_index', $con_doppi, 600 );
+$salita_2 = [ 'status' => 200, 'type' => 'track', 'id' => 5, 'lang' => 'it', 'path' => 'sentiero/salita-2' ];
+$check( 'sentiero/salita-2' === ( $con_doppi['urls']['track'][5]['it'] ?? null ), 'indice di prova: Salita 5 su -2' );
+$check( is_array( wmwp_detail_load( $salita_2 ) ), 'doppione -2 senza chiave della fonte → pagina' );
+$check( false === wmwp_detail_slug_matches( [ 'id' => 5, 'type' => 'track', 'lang' => 'it', 'path' => 'sentiero/salita-3' ], [ 'name' => [ 'it' => 'Salita' ] ], '' ), 'suffisso che l\'indice non ha dato all\'elemento → no' );
+$check( false === wmwp_detail_slug_matches( [ 'id' => 5, 'type' => 'track', 'lang' => 'it', 'path' => 'sentiero/salita-alta' ], [ 'name' => [ 'it' => 'Salita' ] ], '' ), 'slug diverso → no' );
+// Rinominata da «Foo 3» a «Foo»: l'indice (non ancora ricostruito) le ha dato `foo-3` senza suffisso, quindi il nome
+// nuovo non torna
+$check( false === wmwp_detail_slug_matches( [ 'id' => 7, 'type' => 'track', 'lang' => 'it', 'path' => 'sentiero/foo-3' ], [ 'name' => [ 'it' => 'Foo' ] ], '' ), 'rinomina da «Foo 3» a «Foo»: foo-3 non è più il suo slug' );
+// Con un indice della 0.3.0 le forme della 0.2.0 (`-<id>`, `-<chiave>`) non valgono più: «Foo 3» con id 3 rinominata
+// «Foo» non resta servita su `foo-3`
+$foo_tre = wmwp_detail_build_index( [ [ 'type' => 'track', 'id' => 3, 'names' => [ 'it' => 'Foo 3' ], 'kind' => [ 'it' => 'Sentiero' ] ] ], $base_render, [ 'it' ] );
+$foo_tre['config'] = wmwp_detail_base_signature();
+set_transient( 'wmwp_detail_index', $foo_tre, 600 );
+$check( isset( $foo_tre['suffixes'] ), 'indice 0.3.0 riconoscibile anche senza doppioni' );
+$check( false === wmwp_detail_slug_matches( [ 'id' => 3, 'type' => 'track', 'lang' => 'it', 'path' => 'sentiero/foo-3' ], [ 'name' => [ 'it' => 'Foo' ] ], '' ), 'rinomina da «Foo 3» a «Foo» con id 3: la forma -<id> non vale più' );
+set_transient( 'wmwp_detail_index', $con_doppi, 600 );
+delete_option( 'wmwp_detail_index_rebuilt_at' );
+$check( is_array( wmwp_detail_load( [ 'status' => 200, 'type' => 'track', 'id' => 6, 'lang' => 'it', 'path' => 'sentiero/discesa-2' ] ) ), 'doppione -2 con la chiave della fonte → pagina' );
+$check( false === get_option( 'wmwp_detail_index_rebuilt_at' ), 'doppione -2 con la chiave della fonte → nessuna ricostruzione' );
+set_transient( 'wmwp_detail_index', $indice_render, 600 );
+update_option( 'wmwp_detail_index_rebuilt_at', time(), false );
 $check( is_array( $detail ) && isset( $detail['feature']['properties'] ), 'il dettaglio porta il JSON' );
 
 // 2. L'id è passato a un'altra traccia → 404 (null)
@@ -144,9 +188,16 @@ delete_transient( 'wmwp_detail_json_track_6' );
 
 // Doppione con l'indirizzo -<fonte> e un dettaglio senza la fonte (file generato prima che la fonte ci fosse): il nome
 // decide, con il suffisso della fonte dell'indice
+// Le forme della 0.2.0 valgono solo con un indice della 0.2.0 in cache: senza `suffixes`
+$indice_020 = get_transient( 'wmwp_detail_index' );
+unset( $indice_020['suffixes'] );
+set_transient( 'wmwp_detail_index', $indice_020, 600 );
 $monte = [ 'type' => 'track', 'id' => 21, 'lang' => 'it', 'path' => 'sentiero/monte-4076' ];
 $check( wmwp_detail_matches( $monte, [ 'properties' => [ 'name' => [ 'it' => 'Monte' ] ] ], [ 'source' => '4076' ] ), 'doppione -<fonte>, dettaglio senza fonte' );
-$check( ! wmwp_detail_matches( $monte, [ 'properties' => [ 'name' => [ 'it' => 'Monte' ] ] ], [ 'source' => '4077' ] ), 'doppione -<fonte> di un altro elemento' );
+// Un suffisso numerico non dice più di chi è il percorso (`-2` e `-4076` hanno la stessa forma, oc:8983): la forma
+// vecchia con una chiave testuale sì
+$check( ! wmwp_detail_matches( [ 'type' => 'track', 'id' => 21, 'lang' => 'it', 'path' => 'sentiero/monte-n-12-b' ], [ 'properties' => [ 'name' => [ 'it' => 'Monte' ] ] ], [ 'source' => '4077' ] ), 'doppione -<fonte> testuale di un altro elemento' );
+set_transient( 'wmwp_detail_index', $index, 600 );
 
 // 3b. Cache breve del JSON (60 s): due letture di fila chiamano lo shard una volta; un errore non si mette in cache
 $shard['source'] = 'D-77';

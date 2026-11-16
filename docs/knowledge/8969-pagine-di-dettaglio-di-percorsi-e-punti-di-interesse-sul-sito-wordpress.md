@@ -2,12 +2,15 @@
 
 > Lavoro d'origine: oc:8969. Artefatti: [overview](../features/8969-pagine-di-dettaglio-di-percorsi-e-punti-di-interesse-sul-sito-wordpress/overview.md),
 > [piano](../features/8969-pagine-di-dettaglio-di-percorsi-e-punti-di-interesse-sul-sito-wordpress/plan.md).
+> Indirizzi stabili e storico dei percorsi: oc:8983, [overview](../features/8983-indirizzi-stabili-delle-pagine-di-dettaglio-doppioni-dello-slug-e-indirizzi-vecchi/overview.md),
+> [note](../features/8983-indirizzi-stabili-delle-pagine-di-dettaglio-doppioni-dello-slug-e-indirizzi-vecchi/notes.md).
 
 ## Come funziona oggi
 
 Pagine `/<base>/<slug>/` per ogni traccia e POI dello shard, senza post in WordPress, risolte con un indice e lette
-dalle API dello shard con una cache breve. Funzionamento, durate, risposte, funzioni e filtri: README, sezioni
-«Interfaccia pubblica», «Mappa» e «Pagine di dettaglio». Qui c'è solo il perché delle scelte.
+dalle API dello shard con una cache breve. Gli indirizzi restano stabili grazie a uno storico dei percorsi in una
+tabella del plugin. Funzionamento, durate, risposte, funzioni, filtri e comando WP-CLI: README, sezioni «Interfaccia
+pubblica», «Mappa» e «Pagine di dettaglio». Qui c'è solo il perché delle scelte.
 
 ## Perché così
 
@@ -15,11 +18,27 @@ dalle API dello shard con una cache breve. Funzionamento, durate, risposte, funz
   shard e la pagina li mostra entro un minuto da una modifica, senza un processo di sincronizzazione da tenere
   allineato. Il prezzo è l'indice da ricostruire quando i dati cambiano: per questo si ricostruisce da sé, con un
   limite di frequenza perché i bot che chiedono slug inventati non scarichino le liste a ogni richiesta.
-- **Una chiave stabile accanto all'id**: su dev e UAT lo shard rinumera gli id a ogni reset notturno. Con il solo id un
-  indirizzo poteva mostrare un altro elemento e i doppioni dello slug cambiavano suffisso; la chiave riconosce
-  l'elemento anche dopo il reset. Il plugin non sa quale campo sia stabile in uno shard: di base usa
-  `out_source_feature_id` e il tema lo cambia con il filtro `wmwp_detail_source` (Forestas, nel child di wp-forestas:
-  il nid di Drupal).
+- **Una chiave per riconoscere gli elementi**: su dev e UAT lo shard rinumera gli id a ogni reset notturno, quindi
+  l'id da solo non basta. Il plugin non sa quale campo sia stabile in uno shard: di base usa `out_source_feature_id` e
+  il tema lo cambia con il filtro `wmwp_detail_source` (Forestas, nel child di wp-forestas: il nid di Drupal). Chi non
+  ha quel campo è riconosciuto dall'id, che dove non c'è un reset non cambia (oc:8983); una chiave ripetuta resta a un
+  elemento solo, perché due elementi con lo stesso proprietario nello storico si scambierebbero gli indirizzi.
+- **Un percorso resta dell'elemento a cui è stato dato** (oc:8983): un indirizzo è l'identità di una pagina per chi lo
+  ha salvato e per i motori di ricerca, quindi non passa a un altro elemento finché il suo esiste. Il prezzo, accettato,
+  è che un nome corretto su un altro elemento lascia quest'ultimo con il suffisso finché qualcuno non libera
+  l'indirizzo a mano.
+- **Doppioni con `-2`, `-3` e non con un identificativo** (oc:8983): dalla consulenza SEO del 12/11, l'indirizzo non
+  espone identificativi interni, come fa WordPress con gli slug dei post. La stabilità la dà lo storico, non il suffisso.
+- **Storico in una tabella propria, non in un'option** (oc:8983): cresce per sempre e si cerca un percorso alla volta;
+  un'option andrebbe letta e riscritta per intero.
+- **Indice scartato sempre se la chiave della fonte crolla** (oc:8983): un indice senza chiavi libererebbe i percorsi e
+  farebbe scambiare l'indirizzo agli omonimi, e lo storico lo terrebbe scritto. Meglio un sito fermo all'ultimo indice
+  buono, che torna a posto da solo quando le API tornano, di uno storico da correggere a mano. Per lo stesso motivo
+  uno storico che non si legge tiene l'indice di prima.
+- **Righe con l'id dimenticate quando lo shard viene svuotato** (oc:8983): dopo il reset di dev e UAT gli stessi id
+  vanno ad altri elementi, anche a elementi creati in Nova il giorno dopo, quindi una riga con l'id non si può più
+  controllare una per una. Un solo id cambiato invece non basta a dirlo: anche in produzione un elemento cancellato e
+  reimportato cambia id.
 - **Il 503 solo quando la fonte non risponde**: un elemento che la fonte dice cancellato è un 404, non «riprova più
   tardi»; altrimenti la pagina resta nella sitemap e i crawler riprovano un elemento che non c'è.
 - **Redirect temporaneo per l'indirizzo per id**: la destinazione cambia con una rinomina o un reset, e un 301
@@ -38,3 +57,11 @@ dalle API dello shard con una cache breve. Funzionamento, durate, risposte, funz
 - La review interna di oc:8969 ha mostrato che l'indirizzo per id non controllava l'elemento e non ricostruiva
   l'indice (una traccia nuova dava 404) e che un elemento cancellato rispondeva 503: da qui il controllo prima del
   redirect e la distinzione fra 404 e 503 della fonte.
+- **Doppioni con `-<id>`, poi con `-<chiave stabile>`** (oc:8969, superati da oc:8983): l'id cambiava con il reset, e
+  la chiave stabile risolveva solo quello. Restavano tre problemi: all'arrivo di un omonimo tutti i doppioni prendevano
+  il suffisso, quindi anche chi c'era cambiava indirizzo; il 301 di una rinomina valeva solo finché il percorso vecchio
+  era nell'indice, cioè fino alla ricostruzione successiva; il suffisso esponeva un identificativo interno.
+- **Chiave crollata misurata sul numero, poi sulla quota del totale** (oc:8983, superate nelle review interne): tutte
+  e due fermavano l'indice per sempre anche senza un problema delle API, la prima con la cancellazione vera di metà
+  degli elementi, la seconda con la cancellazione dei soli elementi con la chiave o con un import in blocco senza
+  chiave. Per questo si guardano solo gli elementi presenti in tutti e due gli indici.

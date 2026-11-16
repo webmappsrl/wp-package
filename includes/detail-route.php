@@ -2,7 +2,7 @@
 /**
  * Pagine di dettaglio (oc:8969): indirizzi, risoluzione e redirect.
  *
- * Una rewrite per le sole basi in uso (quelle dell'indice) passa `<base>/<slug>` nella query var
+ * Una rewrite per le sole basi in uso (quelle dell'indice e dello storico dei percorsi) passa `<base>/<slug>` nella query var
  * `wmwp_detail_path`; l'indirizzo per id `?wmwp_detail=<track|poi>&wmwp_id=<id>` (link della ricerca) manda con un 302
  * all'indirizzo del dettaglio nella lingua della richiesta: temporaneo, perché la destinazione cambia con una rinomina,
  * un cambio di base o un reset degli id. Con WPML in modalità directory il prefisso di lingua
@@ -45,7 +45,7 @@ function wmwp_detail_bases(): array {
 	if ( ! is_array( $bases ) ) {
 		// Opzione mai scritta (installazione nuova o aggiornamento del plugin): una volta sola dall'indice
 		$index = wmwp_detail_index();
-		$bases = null === $index ? [] : wmwp_detail_index_bases( $index );
+		$bases = null === $index ? [] : wmwp_detail_rule_bases( $index );
 		if ( null !== $index ) {
 			update_option( WMWP_DETAIL_BASES_OPTION, $bases, true );
 		}
@@ -126,7 +126,10 @@ function wmwp_detail_url_by_id( string $type, int $id, string $lang ): string {
 }
 
 /**
- * Elemento di un percorso nell'indice, con la risposta da dare.
+ * Elemento di un percorso, con la risposta da dare. In ordine: l'indice nella lingua chiesta (200); lo storico dei
+ * percorsi (301 all'elemento a cui il percorso è stato dato, 404 se non c'è più, oc:8983); l'indice in un'altra
+ * lingua (301); il ripiego per slug, solo per i percorsi che lo storico non conosce (301); 404. Lo storico viene prima
+ * dell'altra lingua perché, con traduzioni diverse fra omonimi, lì lo stesso percorso può essere di un altro elemento.
  *
  * @return array{status: int, type?: string, id?: int, location?: string}
  */
@@ -137,6 +140,16 @@ function wmwp_detail_find( array $index, string $lang, string $path ): array {
 			'status' => 200,
 			'type'   => $found[0],
 			'id'     => (int) $found[1],
+		];
+	}
+	// Un percorso resta dell'elemento a cui è stato dato finché quell'elemento esiste, mai di un altro
+	$row = wmwp_detail_history_lookup( $lang, $path );
+	if ( null !== $row ) {
+		$id = wmwp_detail_index_id_for_key( $index, $row['type'], $row['key'] );
+		return null === $id ? [ 'status' => 404 ] : [
+			'status' => 301,
+			'type'   => $row['type'],
+			'id'     => $id,
 		];
 	}
 	// Lo stesso percorso in un'altra lingua: l'elemento esiste, va mandato al suo indirizzo in questa lingua
@@ -160,6 +173,10 @@ function wmwp_detail_find( array $index, string $lang, string $path ): array {
 				$types[ $item[0] ] = true;
 			}
 		}
+	}
+	// Una base che l'indice non ha più (cambio di route-type, pagina base rinominata): i tipi vengono dallo storico
+	if ( ! $types ) {
+		$types = array_fill_keys( wmwp_detail_history_base_types( $base ), true );
 	}
 	$matches = [];
 	foreach ( array_unique( array_merge( [ $lang ], array_keys( $index['paths'] ) ) ) as $code ) {

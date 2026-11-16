@@ -101,10 +101,16 @@ Vale per tutte le richieste del server allo shard (config.json dell'app per cart
 passano da `wmwp_server_url()`.
 
 **`wmwp_detail_items`** — elementi dell'indice dei dettagli (`type`, `id`, `names`, `kind`, `source`) prima della
-costruzione. **`wmwp_detail_source`** — chiave stabile di una traccia o di un POI (`$source`, `$type`, `$props`), che
-non cambia quando lo shard rinumera gli id: di base `out_source_feature_id`. Si chiama sulle proprietà del dettaglio,
-su quelle di `pois.geojson` e sul `_source` dell'indice Elasticsearch delle tracce: un tema che la cambia legge tutte e
-tre le forme (es. Forestas: il nid di Drupal, `forestas.sardegnasentieri_id` o `sardegnasentieri_id`). **`wmwp_detail_meta`** — meta del dettaglio (`title`, `description`, `image`, `url`, `locale`).
+costruzione; togliere un elemento libera i suoi percorsi, come se non esistesse più. **`wmwp_detail_source`** —
+chiave stabile di una traccia o di un POI (`$source`, `$type`, `$props`), che non cambia quando lo shard rinumera gli
+id: di base `out_source_feature_id`. Si chiama sulle proprietà del dettaglio, su quelle di `pois.geojson` e sul
+`_source` dell'indice Elasticsearch delle tracce: un tema che la cambia legge tutte e tre le forme (es. Forestas: il
+nid di Drupal, `forestas.sardegnasentieri_id` o `sardegnasentieri_id`). Dalla 0.3.0 è l'identità con cui lo storico
+dei percorsi ricorda a chi appartiene un indirizzo: deve essere unica per tipo (una ripetuta vale solo per l'id più
+basso), non deve mai cambiare valore né forma per lo stesso elemento (con un valore nuovo le righe vecchie restano
+orfane: i 301 delle rinomine diventano 404 e gli omonimi possono scambiarsi l'indirizzo), e se è numerica decide fra
+gli omonimi chi ha l'indirizzo senza suffisso. Deve arrivare dalle API già al primo giro della 0.3.0: un primo giro
+senza chiave registra gli elementi con l'id, e quando la chiave arriva quelle righe non si convertono. **`wmwp_detail_meta`** — meta del dettaglio (`title`, `description`, `image`, `url`, `locale`).
 **`wmwp_detail_print_meta`** — `false` per non far stampare i meta al plugin (predefinito: `true` senza Impreza).
 
 ### JavaScript
@@ -180,6 +186,15 @@ filtri attivi sopra i risultati), `wmwp-chip` (un filtro attivo, togliibile), `w
 `__group`, `__group-label`, `__formats`, `__download`, `__status`, e `has-selection`, `is-downloading` sul
 contenitore; per la mappa `wmwp-search__toolbar` (totale e selettore), `wmwp-search__view` (selettore, pulsanti con
 `aria-pressed`), `wmwp-search__map` con `__map-canvas` e `__map-note` (avanzamento e inquadratura).
+
+### WP-CLI
+
+`wp wmwp detail-paths list <percorso>` (o `--type=<track|poi> --key=<chiave della fonte>` / `--id=<id>`) mostra a quale
+elemento appartiene un percorso dello storico, o i percorsi di un elemento. `wp wmwp detail-paths forget <percorso>
+[--lang=<lingua>]` lo libera: toglie le sue righe, rimette in gioco gli omonimi e ricostruisce l'indice, così il
+percorso va all'elemento che oggi porta quel nome e i percorsi di prima degli omonimi portano con un 301 a quelli nuovi.
+Serve alle correzioni a mano: con le regole dello storico un nome corretto su un altro elemento lascia quest'ultimo con
+il suffisso (oc:8983).
 
 ## Mappa
 
@@ -291,13 +306,35 @@ si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano i
   nella lingua, `track`/`poi` se manca) oppure, con «Indirizzo sotto una pagina», il percorso della pagina scelta.
   Le opzioni sono `wmwp_detail_tracks_use_page`, `wmwp_detail_tracks_page`, `wmwp_detail_pois_use_page`,
   `wmwp_detail_pois_page`: un tema le impone con `pre_option_<nome>`.
-- **Slug**: il nome nella lingua della pagina (italiano se manca) passato in `sanitize_title`; i doppioni nella stessa
-  base prendono `-<chiave stabile>` (filtro `wmwp_detail_source`), così l'indirizzo non cambia con un reset degli id
-  dello shard, o `-<id>` se l'elemento non ce l'ha. Una traduzione aggiunta o un nome cambiato cambiano l'indirizzo da
-  soli: alla prima richiesta del vecchio l'indice si ricostruisce (se permesso) e risponde con un 301 al nuovo.
+- **Slug**: il nome nella lingua della pagina (italiano se manca) passato in `sanitize_title`. Fra i doppioni nella
+  stessa base e lingua chi ha già il percorso lo tiene, e gli altri prendono `-2`, `-3`… in ordine di chiave: prima la
+  chiave della fonte (filtro `wmwp_detail_source`) numerica in ordine crescente, poi quella testuale, poi gli elementi
+  con il solo id. Una chiave della fonte ripetuta (due elementi con lo stesso valore) resta all'id più basso; gli altri
+  elementi contano come senza chiave. Il risultato non dipende dall'ordine in cui gli elementi arrivano dall'API e,
+  con lo storico, un omonimo nuovo non toglie l'indirizzo a chi c'era (oc:8983). L'indice ricorda il suffisso dato a
+  ogni elemento (`suffixes`): il controllo del nome accetta quello e nessun altro.
+- **Storico dei percorsi** (oc:8983): tabella `{prefix}wmwp_detail_paths`, una riga per lingua e percorso con
+  l'elemento a cui è stato dato (tipo e chiave: la chiave della fonte se c'è, altrimenti l'id). Un percorso resta
+  dell'elemento a cui è stato dato finché quell'elemento esiste: dopo una rinomina, una traduzione del nome o un cambio
+  di base il percorso vecchio porta con un 301 a quello attuale anche dopo che l'indice è stato ricostruito, e non va a
+  nessun altro elemento; quando l'elemento non c'è più dà 404 e torna libero per un elemento nuovo con quel nome.
+  Cambia solo con un indice accettato: righe con l'id dimenticate, primo giro e percorsi nuovi si scrivono dopo i
+  controlli, e solo le righe che cambiano. Due protezioni: un indice in cui, fra gli elementi presenti anche
+  nell'indice precedente che avevano la chiave della fonte, meno della metà ce l'ha ancora (API che hanno smesso di
+  darla) si scarta sempre, mentre cancellazioni e aggiunte le giudica il controllo sui conteggi; quando, per un tipo,
+  più della metà degli elementi con la chiave della fonte cambia id (shard svuotato e ricaricato, come il reset di dev
+  e UAT) le righe registrate con l'id di quel tipo si dimenticano. Se lo storico c'è ma non si legge, resta l'indice di
+  prima. I controlli usano l'ultimo indice buono anche quando cambia la configurazione delle basi. La tabella si crea e
+  si aggiorna da sola (`dbDelta()`, versione dello schema in `wmwp_detail_paths_db_version`, anche quando il plugin si
+  aggiorna sostituendo i file); se non si può creare il plugin funziona senza storico e riprova dopo un'ora. La
+  disattivazione la lascia, l'eliminazione del plugin (e, in multisite, quella di un sito) la cancella. Al primo giro
+  i percorsi dell'indice esistente entrano nello storico come non attuali: i doppioni della 0.2.0 (`-<chiave>`) si
+  ricalcolano e portano con un 301 a quelli nuovi.
 - **Risposte**: 200; 301 se lo slug è di un'altra lingua, la base è cambiata o l'elemento è stato rinominato; 404 se
   l'indirizzo non c'è o la fonte dice che l'elemento non c'è più (prima l'indice si ricostruisce una volta, al massimo
-  ogni 5 minuti); 503 con `Retry-After` solo se la fonte non risponde (rete, timeout, 5xx). Prima di stampare si
+  ogni 5 minuti); 503 con `Retry-After` solo se la fonte non risponde (rete, timeout, 5xx). Un percorso si cerca
+  nell'indice della lingua chiesta, poi nello storico, poi nell'indice delle altre lingue, poi con il ripiego per slug,
+  che vale solo per i percorsi che lo storico non conosce. Prima di stampare si
   controlla che l'id porti ancora all'elemento chiesto: la chiave stabile, se c'è nel dettaglio e nell'indice (una
   traccia rinominata resta lei, una omonima che ha preso il suo id no); altrimenti lo slug del nome. Il dettaglio di un
   POI non ha il nome, che viene dall'indice. Il ripiego per slug (base cambiata) resta fra i tipi della base chiesta.
@@ -317,7 +354,8 @@ si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano i
   WPML: `hreflang` (li stampa il plugin: WPML lo fa solo per i post) e selettore di lingua sullo stesso elemento.
 - **Sitemap**: provider `wmwpdetail` nella sitemap del core, sottotipi `track` e `poi`, ogni elemento in ogni lingua
   (solo con `blog_public = 1`).
-- **Rewrite**: regole per le sole basi in uso, rigenerate quando l'elenco delle basi cambia; una pagina vera con lo
+- **Rewrite**: regole per le sole basi in uso, quelle dell'indice e quelle dello storico (così i percorsi vecchi di una
+  base rinominata arrivano ancora al plugin), rigenerate quando l'elenco delle basi cambia; una pagina vera con lo
   stesso percorso la serve WordPress.
 
 ## Traduzioni
@@ -335,6 +373,9 @@ Con WP-CLI, dalla cartella di WordPress: `wp eval-file <plugin>/tests/php/shards
 configurazione degli shard con wm-types che non risponde, `map-tiles.php` la carta di base e i colori dei layer letti
 dal `config.json` dell'app (risposte finte), `search-params.php` i nomi dei parametri e delle chiavi dei filtri che
 non possono essere query var di WordPress, `detail-index.php`, `detail-base.php`, `detail-cache.php`, `detail-aws.php`, `icons.php`, `map-detail.php`, `webapp-url.php`,
-`detail-route.php`, `detail-render.php`, `detail-seo.php`, `detail-sitemap.php` le pagine di dettaglio (slug, basi,
-cache dell'indice con lo shard finto, risoluzione e redirect, controllo dell'elemento, meta, sitemap e hreflang). Test e sorgente della mappa restano fuori dall'archivio del repo
+`detail-route.php`, `detail-render.php`, `detail-seo.php`, `detail-sitemap.php`, `detail-history.php` le pagine di
+dettaglio (slug, basi, cache dell'indice con lo shard finto, risoluzione e redirect, controllo dell'elemento, meta,
+sitemap e hreflang, storico dei percorsi). I `detail-*.php` girano sul sito vero: includono `history-sandbox.php`, che
+fa usare allo storico una tabella di prova cancellata alla fine, anche se il test si interrompe, così le righe di prova
+non riservano percorsi agli elementi veri. Test e sorgente della mappa restano fuori dall'archivio del repo
 (`.gitattributes`).
