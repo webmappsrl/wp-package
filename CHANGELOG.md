@@ -3,6 +3,31 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.3.0 — 2026-11-16
+
+### Aggiunto
+- Storico dei percorsi delle pagine di dettaglio, nella tabella `{prefix}wmwp_detail_paths` (una riga per lingua e
+  percorso, con l'elemento a cui è stato dato): un percorso resta del suo elemento finché l'elemento esiste, e dopo
+  una rinomina, una traduzione del nome o un cambio di base porta con un 301 all'indirizzo attuale anche dopo la
+  ricostruzione dell'indice. Tabella creata e aggiornata da sola con la versione dello schema, cancellata da
+  `uninstall.php` (oc:8983).
+- Comando `wp wmwp detail-paths list|forget` per vedere a chi appartiene un percorso e liberarlo (oc:8983).
+- Protezioni dello storico: un indice in cui la chiave della fonte si perde (fra gli elementi presenti anche prima,
+  meno della metà la tiene: API cambiate) si scarta sempre; quando lo shard viene svuotato e ricaricato (per un tipo,
+  più della metà degli elementi con la chiave della fonte cambia id) le righe registrate con l'id di quel tipo si
+  dimenticano; se lo storico non si legge resta l'indice di prima; i controlli usano l'ultimo indice buono anche dopo
+  un cambio di configurazione delle basi; lo storico si scrive solo dopo che l'indice è stato accettato (oc:8983).
+- Chiave della fonte ripetuta: resta all'id più basso, gli altri elementi contano come senza chiave (oc:8983).
+- Suffisso dei doppioni nell'indice (`suffixes`): il controllo del nome accetta solo quello dato all'elemento (oc:8983).
+
+### Cambiato
+- Doppioni dello slug: chi ha già il percorso lo tiene, gli altri prendono `-2`, `-3`… in ordine di chiave (chiave
+  della fonte numerica, poi testuale, poi solo id) invece di `-<chiave stabile>` o `-<id>`. Al primo giro i doppioni
+  della 0.2.0 si ricalcolano e i loro percorsi vecchi portano con un 301 a quelli nuovi (oc:8983).
+- Risoluzione di un percorso: lo storico viene prima dell'indice delle altre lingue, e il ripiego per slug vale solo
+  per i percorsi che lo storico non conosce (oc:8983).
+- Le regole di rewrite coprono anche le basi dello storico (oc:8983).
+
 ## 0.2.0 — 2026-11-13
 
 ### Aggiunto
