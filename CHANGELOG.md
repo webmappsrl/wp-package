@@ -3,6 +3,24 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.4.0 — 2026-11-16
+
+### Aggiunto
+- Pagine di dettaglio di tracce e POI: se lo shard non risponde (qualunque codice diverso da 200, 304 e 404: errore di rete, timeout, 401/403, 5xx, risposta che non è un
+  dettaglio) e c'è già una copia in cache, la pagina esce dalla copia con 200 invece del 503; la copia dura almeno
+  un'ora e al massimo 6 ore dall'ultimo controllo riuscito. La risposta porta `X-WMWP-Stale: 1` e `nocache_headers()`; lo shard si richiama al
+  massimo una volta ogni 60 s; senza copia resta il 503 (oc:8990).
+- Filtro `wmwp_detail_stale_if_error` (predefinito `true`) per spegnere il ripiego, e `wmwp_detail_served_stale(
+  string $type = '', int $id = 0 )` per sapere se un dettaglio è uscito dalla copia (oc:8990).
+- Righe nel log di PHP: «dalla copia», «503, nessuna copia», «503, copia non usata» (oc:8990).
+- `wmwp_http_json()` restituisce anche `error`, il messaggio dell'errore di rete (oc:8990).
+
+### Cambiato
+- Con il 304 la copia si riscrive solo quando le resta meno di un'ora: dopo l'ultimo controllo riuscito dura almeno
+  un'ora e al massimo 6 (oc:8990).
+- Il 404 dell'API `api/ec/<tipo>/<id>` (non quello del solo file su AWS) cancella la copia dell'elemento: non esce più al guasto successivo. `$fresh = true` e
+  `wmwp_detail_url_by_id()` non usano la copia, come prima (oc:8990).
+
 ## 0.3.0 — 2026-11-16
 
 ### Aggiunto

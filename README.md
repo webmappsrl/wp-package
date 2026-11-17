@@ -112,6 +112,9 @@ orfane: i 301 delle rinomine diventano 404 e gli omonimi possono scambiarsi l'in
 gli omonimi chi ha l'indirizzo senza suffisso. Deve arrivare dalle API già al primo giro della 0.3.0: un primo giro
 senza chiave registra gli elementi con l'id, e quando la chiave arriva quelle righe non si convertono. **`wmwp_detail_meta`** — meta del dettaglio (`title`, `description`, `image`, `url`, `locale`).
 **`wmwp_detail_print_meta`** — `false` per non far stampare i meta al plugin (predefinito: `true` senza Impreza).
+**`wmwp_detail_stale_if_error`** — `true` (predefinito) per servire la copia in cache di una traccia o di un POI
+quando lo shard non risponde; `false` per tornare al 503 (`$stale`, `$type`, `$id`). Vedi «Copia quando lo shard non
+risponde».
 
 ### JavaScript
 
@@ -175,7 +178,9 @@ c'è; `$lang` è il codice WPML, es. `en-us`), `wmwp_detail_urls( $type, $id )` 
 `wmwp_detail_url_by_id( $type, $id, $lang )` (come la prima, ma controlla con la chiave stabile che l'id sia ancora
 dello stesso elemento e, se serve, ricostruisce l'indice: la usa l'indirizzo per id), `wmwp_detail_source( $type,
 $props )` (chiave stabile). Per le richieste allo shard `wmwp_http_json( $url, $timeout, $headers )` restituisce stato
-HTTP (0 se la richiesta non arriva), JSON decodificato e risposta (`includes/http.php`). Il JS
+HTTP (0 se la richiesta non arriva), JSON decodificato, risposta e `error` (il messaggio dell'errore di rete, stringa
+vuota se una risposta è arrivata; `includes/http.php`). `wmwp_detail_served_stale( string $type = '', int $id = 0 )` dice se
+il dettaglio letto è uscito dalla copia (senza argomenti: almeno uno; con tipo e id: quello). Il JS
 cerca gli elementi `data-wmwp`. Il `<noscript>` di `search.php` manda alla ricerca di WordPress con `nojs=1`: un tema che
 reindirizza `?s=` alla pagina di ricerca non deve farlo quando c'è quel parametro. Una sola ricerca per pagina
 (gli id dello scheletro sono fissi). Classi su cui il tema può contare: `wmwp-search`, `wmwp-card`, `wmwp-row`,
@@ -285,9 +290,28 @@ scelte e la loro storia in [docs/knowledge/8969-…](docs/knowledge/8969-pagine-
 - **POI**: `api/ec/poi/<id>` dello shard, che costruisce il dettaglio a ogni chiamata (un file per POI non esiste).
 
 Una modifica nel backend si vede entro un minuto. La durata si cambia con il filtro `wmwp_detail_cache_ttl` (0 spegne la
-cache); il JSON resta salvato 6 ore per la richiesta condizionale, gli errori non vanno in cache, e un JSON in cache
-che non torna più con l'indirizzo (rinomina) si rilegge subito. `aws_api` si può cambiare con il filtro
+cache); il JSON resta salvato 6 ore per la richiesta condizionale, e un JSON in cache che non torna più con l'indirizzo
+(rinomina) si rilegge subito. Un errore senza copia non va in cache: la visita successiva richiama la fonte. Con una
+copia invece anche il controllo fallito vale per la cache breve (segno `WMWP_DETAIL_STALE_MARK`), così la fonte si
+richiama al massimo una volta ogni 60 s. Se lo shard non risponde e c'è già una copia, la pagina esce dalla copia invece del 503 (oc:8990): vedi
+«Copia quando lo shard non risponde». `aws_api` si può cambiare con il filtro
 `wmwp_api_urls`, come gli altri indirizzi, e lo usa solo il server.
+
+**Copia quando lo shard non risponde** (oc:8990). Se la richiesta del JSON di una traccia o di un POI fallisce (codice
+diverso da 200, 304 e 404: errore di rete, timeout, 401/403, 5xx o risposta che non è un dettaglio) e in cache c'è già una copia, la pagina esce dalla copia con 200
+invece del 503. La copia dura almeno un'ora e al massimo 6 ore dall'ultimo controllo riuscito. Cosa succede:
+
+- la risposta porta l'header `X-WMWP-Stale: 1` e `nocache_headers()`, così una cache di pagina o una CDN non tiene la
+  pagina vecchia oltre il guasto;
+- lo shard si richiama al massimo una volta ogni 60 s (la cache breve), non a ogni visita;
+- il filtro `wmwp_detail_stale_if_error` (predefinito `true`) la spegne; `wmwp_detail_served_stale()` dice se un
+  dettaglio è uscito dalla copia;
+- senza copia il 503 resta com'era; il 404 dell'API `api/ec/<tipo>/<id>` resta 404 e cancella la copia, così non esce più nemmeno al
+  guasto successivo (il 404 del solo file su AWS non la cancella: è uno dei motivi del ripiego);
+- con `$fresh = true` (rilettura dopo un indirizzo che non torna) e in `wmwp_detail_url_by_id()` la copia non si usa:
+  il comportamento è quello di prima;
+- nel log di PHP: `[wp-package] dettaglio <tipo> <id> dalla copia, fonte non raggiungibile: <motivo>`, `… 503, nessuna
+  copia: <motivo>` e `… 503, copia non usata: <motivo>` (copia presente ma `$fresh` o filtro spento).
 
 **Webapp dello shard.** `wmwp_webapp_url()` restituisce l'indirizzo della webapp dello shard e dell'app configurati,
 con la barra finale: quello scritto nelle impostazioni («Webapp», opzione `wmwp_webapp_url`), altrimenti il dominio
@@ -332,7 +356,7 @@ si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano i
   ricalcolano e portano con un 301 a quelli nuovi.
 - **Risposte**: 200; 301 se lo slug è di un'altra lingua, la base è cambiata o l'elemento è stato rinominato; 404 se
   l'indirizzo non c'è o la fonte dice che l'elemento non c'è più (prima l'indice si ricostruisce una volta, al massimo
-  ogni 5 minuti); 503 con `Retry-After` solo se la fonte non risponde (rete, timeout, 5xx). Un percorso si cerca
+  ogni 5 minuti); 503 con `Retry-After` solo se la fonte non risponde e non c'è una copia in cache; con la copia, 200 con `X-WMWP-Stale: 1` e header no-cache (oc:8990). Un percorso si cerca
   nell'indice della lingua chiesta, poi nello storico, poi nell'indice delle altre lingue, poi con il ripiego per slug,
   che vale solo per i percorsi che lo storico non conosce. Prima di stampare si
   controlla che l'id porti ancora all'elemento chiesto: la chiave stabile, se c'è nel dettaglio e nell'indice (una
@@ -342,7 +366,10 @@ si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano i
   `wmwp_detail_index_last`; un evento cron (`wmwp_detail_refresh_index`) lo rifà ogni ora, così di solito la
   ricostruzione non la paga un visitatore. Non si salva mai vuoto, e un tipo che cala sotto la metà si scarta per due
   volte di fila (alla terza si accetta). Il JSON di ogni dettaglio resta in cache 6 ore per la richiesta condizionale;
-  il controllo dopo la cache breve è un transient a parte, così con il 304 il JSON non si riscrive.
+  il controllo dopo la cache breve è un transient a parte, così con il 304 il JSON non si riscrive (si riscrive solo
+  quando alla copia resta meno di un'ora, quindi dopo l'ultimo controllo riuscito la copia dura almeno un'ora e al
+  massimo 6). Gli errori non entrano in cache, ma una copia già presente si serve quando lo shard non risponde
+  (oc:8990).
 - **Regola di rewrite**: `<base>/<slug>` tranne feed, embed, trackback e pagine dei commenti della pagina base, che
   restano a WordPress; i nomi riservati di WordPress (`feed`, `page`, `search`…) non diventano basi.
 - **Indirizzo per id**: `?wmwp_detail=<track|poi>&wmwp_id=<id>` manda con un 302 (la destinazione cambia con una
