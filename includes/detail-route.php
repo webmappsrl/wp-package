@@ -91,7 +91,8 @@ function wmwp_detail_url( string $type, int $id, string $lang ): string {
  * elemento che l'indice in cache non ha ancora, o un id che dopo un reset dello shard è passato a un altro elemento.
  * Se l'id non è nell'indice, o la chiave stabile del suo JSON non è quella dell'indice, l'indice si ricostruisce una
  * volta (se permesso) e si riprova; se ancora non torna, ''. Il JSON letto qui resta nella cache breve e serve alla
- * pagina subito dopo. Con la fonte che non risponde si manda all'indirizzo dell'indice senza controllo.
+ * pagina subito dopo. Con la fonte che non risponde si manda all'indirizzo dell'indice senza controllo, anche quando
+ * il JSON esce dalla copia in cache (oc:8990).
  */
 function wmwp_detail_url_by_id( string $type, int $id, string $lang ): string {
 	if ( $id <= 0 || ! in_array( $type, WMWP_DETAIL_TYPES, true ) ) {
@@ -109,7 +110,9 @@ function wmwp_detail_url_by_id( string $type, int $id, string $lang ): string {
 			if ( is_wp_error( $feature ) && 'wmwp_detail_not_found' === $feature->get_error_code() ) {
 				return null;
 			}
-			if ( ! is_wp_error( $feature ) ) {
+			// La copia servita perché la fonte non risponde non decide: può essere di prima di un reset, e darebbe
+			// un 404 dove con la fonte giù si manda all'indirizzo dell'indice
+			if ( ! is_wp_error( $feature ) && ! wmwp_detail_served_stale( $type, $id ) ) {
 				$source = wmwp_detail_source( $type, (array) $feature['properties'] );
 				if ( '' !== $source && $source !== $known ) {
 					return null;

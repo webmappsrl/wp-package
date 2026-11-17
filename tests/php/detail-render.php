@@ -3,7 +3,7 @@
  * Test (oc:8969): lettura del dettaglio e controllo che l'id porti ancora all'elemento chiesto. Lo shard è finto
  * (`pre_http_request`). Una traccia il cui nome dà lo slug chiesto è valida; con un altro nome (l'id è passato a
  * un'altra traccia) è un 404; un POI, il cui dettaglio non ha il nome, si controlla con l'id della fonte; con lo shard
- * in errore il risultato è un WP_Error (503).
+ * in errore il risultato è un WP_Error (503), o la copia in cache se c'è (oc:8990, casi 5).
  * Si lancia con: wp eval-file tests/php/detail-render.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1.
  */
@@ -12,6 +12,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 require __DIR__ . '/history-sandbox.php';
+
+// Gli avvisi del plugin (error_log) vanno su un file temporaneo: i casi del ripiego (5) li leggono, e l'uscita del test
+// resta «PASS» o «FAIL: …»
+$log_file = (string) tempnam( sys_get_temp_dir(), 'wmwp-log' );
+$log_was  = (string) ini_get( 'error_log' );
+ini_set( 'error_log', $log_file ); // phpcs:ignore WordPress.PHP.IniSet.Risky
+register_shutdown_function(
+	function () use ( $log_file, $log_was ) {
+		ini_set( 'error_log', $log_was ); // phpcs:ignore WordPress.PHP.IniSet.Risky
+		wp_delete_file( $log_file );
+	}
+);
 
 $failures = [];
 $check    = function ( bool $ok, string $what ) use ( &$failures ) {
@@ -247,6 +259,202 @@ delete_transient( 'wmwp_detail_json_track_5' );
 $errore = wmwp_detail_load( $track );
 $check( is_wp_error( $errore ) && 'wmwp_detail_unavailable' === $errore->get_error_code(), 'shard in errore → WP_Error wmwp_detail_unavailable' );
 $check( false === get_transient( 'wmwp_detail_json_track_5' ), 'l\'errore non va in cache' );
+
+// 5. Ripiego sulla copia (oc:8990): con la fonte che non risponde e il JSON in cache, il dettaglio esce dalla copia, con
+// un avviso nel log e il segnale per l'header `X-WMWP-Stale`. Il 404 della fonte, `$fresh = true` e il filtro spento
+// restano come prima. Shard e AWS finti a parte (priorità 20, dopo quello sopra), con il contatore delle richieste
+// all'API; gli avvisi si leggono dal file temporaneo dell'inizio
+$fake      = [
+	'api'   => 500,
+	'aws'   => 404,
+	'calls' => 0,
+];
+$fake_aws  = 'http://aws.test/wmfe/ripiego';
+$fake_http = function ( $pre, $args, $url ) use ( &$fake, $fake_aws ) {
+	if ( 0 === strpos( $url, $fake_aws . '/tracks/' ) ) {
+		$code = $fake['aws'];
+	} elseif ( preg_match( '#/api/ec/(?:track|poi)/\d+$#', $url ) ) {
+		++$fake['calls'];
+		if ( 0 === $fake['api'] ) {
+			return new WP_Error( 'http_request_failed', 'cURL error 28: timeout' );
+		}
+		$code = $fake['api'];
+	} else {
+		return $pre;
+	}
+	return [
+		'headers'  => [ 'etag' => '"c1"' ],
+		'body'     => 200 === $code ? wp_json_encode( [ 'type' => 'Feature', 'properties' => [ 'id' => 8990, 'name' => [ 'it' => 'Fresca' ] ], 'geometry' => null ] ) : '',
+		'response' => [
+			'code'    => $code,
+			'message' => '',
+		],
+		'cookies'  => [],
+	];
+};
+add_filter( 'pre_http_request', $fake_http, 20, 3 );
+$with_aws = function ( $urls ) use ( $fake_aws ) {
+	$urls['aws_api'] = $fake_aws;
+	return $urls;
+};
+// Copia del JSON in cache, con l'ETag, e il segno del controllo scaduto: la lettura dopo chiede alla fonte
+$copy    = function ( string $type, int $id, array $props = [], int $expires = HOUR_IN_SECONDS ) {
+	$feature = [ 'type' => 'Feature', 'properties' => $props + [ 'id' => $id, 'name' => [ 'it' => 'Copia' ] ], 'geometry' => null ];
+	set_transient( 'wmwp_detail_json_' . $type . '_' . $id, [ 'feature' => $feature, 'etag' => '"c1"', 'modified' => '' ], $expires );
+	delete_transient( 'wmwp_detail_chk_' . $type . '_' . $id );
+};
+$name_of = function ( $feature ): string {
+	return is_array( $feature ) ? (string) ( $feature['properties']['name']['it'] ?? '' ) : 'errore';
+};
+$log_lines = function () use ( $log_file ): array {
+	$lines = file( $log_file, FILE_IGNORE_NEW_LINES );
+	$ours  = function ( string $line ): bool {
+		return false !== strpos( $line, '[wp-package] dettaglio' );
+	};
+	return array_values( array_filter( is_array( $lines ) ? $lines : [], $ours ) );
+};
+// Una sola riga del log contiene il testo
+$log_has   = function ( string $text ) use ( $log_lines ): bool {
+	$match = function ( string $line ) use ( $text ): bool {
+		return false !== strpos( $line, $text );
+	};
+	return 1 === count( array_filter( $log_lines(), $match ) );
+};
+$log_clear = function () use ( $log_file ) {
+	file_put_contents( $log_file, '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+};
+set_transient( 'wmwp_detail_index', $index, 600 );
+update_option( 'wmwp_detail_index_rebuilt_at', time(), false );
+
+// 5a. Copia in cache, segno scaduto, API 500 → la copia, il segnale e un avviso
+$check( ! wmwp_detail_served_stale(), 'ripiego: prima del ripiego nessun segnale' );
+$copy( 'poi', 8990 );
+$log_clear();
+$fake['api']   = 500;
+$fake['calls'] = 0;
+$check( 'Copia' === $name_of( wmwp_detail_fetch( 'poi', 8990 ) ), 'ripiego: API 500 con la copia → la copia' );
+$check( wmwp_detail_served_stale() && wmwp_detail_served_stale( 'poi', 8990 ), 'ripiego: segnale acceso' );
+$check( $log_has( '[wp-package] dettaglio poi 8990 dalla copia, fonte non raggiungibile: API: HTTP 500' ), 'ripiego: avviso nel log (' . implode( ' | ', $log_lines() ) . ')' );
+
+// 5b. Seconda visita nello stesso minuto: nessuna richiesta, nessun avviso, la copia resta segnalata
+$check( 'Copia' === $name_of( wmwp_detail_fetch( 'poi', 8990 ) ), 'ripiego: seconda visita → la copia' );
+$check( 1 === $fake['calls'], 'ripiego: due visite in 60 s → una richiesta allo shard (' . $fake['calls'] . ')' );
+$check( 1 === count( $log_lines() ), 'ripiego: due visite in 60 s → un avviso (' . count( $log_lines() ) . ')' );
+$check( wmwp_detail_served_stale( 'poi', 8990 ), 'ripiego: seconda visita nello stesso minuto → ancora segnalata' );
+
+// 5c. Errore di rete: il motivo nel log è il messaggio dell'errore
+$copy( 'poi', 8990 );
+$log_clear();
+$fake['api'] = 0;
+$check( 'Copia' === $name_of( wmwp_detail_fetch( 'poi', 8990 ) ), 'ripiego: errore di rete con la copia → la copia' );
+$check( $log_has( 'fonte non raggiungibile: API: cURL error 28: timeout' ), 'ripiego: errore di rete, motivo nel log (' . implode( ' | ', $log_lines() ) . ')' );
+
+// 5d. Traccia: file su AWS che dà 404 e API 500 → la copia (il 404 del file non vuol dire che la traccia non c'è)
+add_filter( 'wmwp_api_urls', $with_aws, 100 );
+$copy( 'track', 8990 );
+$log_clear();
+$fake['api'] = 500;
+$fake['aws'] = 404;
+$check( 'Copia' === $name_of( wmwp_detail_fetch( 'track', 8990 ) ), 'ripiego: traccia con file AWS 404 e API 500 → la copia' );
+$check( wmwp_detail_served_stale( 'track', 8990 ), 'ripiego: traccia, segnale acceso' );
+$check( $log_has( '[wp-package] dettaglio track 8990 dalla copia, fonte non raggiungibile: file AWS: HTTP 404; API: HTTP 500' ), 'ripiego: traccia, motivo del file e dell\'API (' . implode( ' | ', $log_lines() ) . ')' );
+remove_filter( 'wmwp_api_urls', $with_aws, 100 );
+
+// 5e. Nessuna copia, API 500 → 503 come oggi, con l'avviso
+delete_transient( 'wmwp_detail_json_poi_8990' );
+delete_transient( 'wmwp_detail_chk_poi_8990' );
+$log_clear();
+$no_copy = wmwp_detail_fetch( 'poi', 8990 );
+$check( is_wp_error( $no_copy ) && 'wmwp_detail_unavailable' === $no_copy->get_error_code(), 'ripiego: nessuna copia → wmwp_detail_unavailable' );
+$check( ! wmwp_detail_served_stale( 'poi', 8990 ), 'ripiego: nessuna copia → niente segnale' );
+$check( $log_has( '[wp-package] dettaglio poi 8990 503, nessuna copia: API: HTTP 500' ), 'ripiego: nessuna copia, avviso del 503 (' . implode( ' | ', $log_lines() ) . ')' );
+$check( false === get_transient( 'wmwp_detail_json_poi_8990' ), 'ripiego: l\'errore non va in cache' );
+
+// 5f. Copia in cache, API 404 → resta 404: l'elemento non c'è più, e la sua copia esce dalla cache. All'errore dopo
+// (segno scaduto, API 500) non torna fuori la copia di un elemento cancellato: 503
+$copy( 'poi', 8990 );
+$fake['api'] = 404;
+$not_found   = wmwp_detail_fetch( 'poi', 8990 );
+$check( is_wp_error( $not_found ) && 'wmwp_detail_not_found' === $not_found->get_error_code(), 'ripiego: 404 con la copia → wmwp_detail_not_found' );
+$check( ! wmwp_detail_served_stale( 'poi', 8990 ), 'ripiego: 404 → niente segnale' );
+$check( false === get_transient( 'wmwp_detail_json_poi_8990' ), 'ripiego: 404 → la copia esce dalla cache' );
+delete_transient( 'wmwp_detail_chk_poi_8990' );
+$fake['api']  = 500;
+$after_delete = wmwp_detail_fetch( 'poi', 8990 );
+$check( is_wp_error( $after_delete ) && 'wmwp_detail_unavailable' === $after_delete->get_error_code(), 'ripiego: 404 e poi API 500 → wmwp_detail_unavailable, non la copia dell\'elemento cancellato' );
+
+// 5g. Copia in cache, API 500, $fresh = true → 503 come oggi: chi chiede la lettura fresca vuole il verdetto della fonte
+$copy( 'poi', 8990 );
+$log_clear();
+$fake['api'] = 500;
+$fresh_read  = wmwp_detail_fetch( 'poi', 8990, true );
+$check( is_wp_error( $fresh_read ) && 'wmwp_detail_unavailable' === $fresh_read->get_error_code(), 'ripiego: $fresh = true con la copia → wmwp_detail_unavailable' );
+$check( ! wmwp_detail_served_stale( 'poi', 8990 ), 'ripiego: $fresh = true → niente segnale' );
+$check( $log_has( '[wp-package] dettaglio poi 8990 503, copia non usata: API: HTTP 500' ), 'ripiego: $fresh = true, avviso del 503 con la copia non usata (' . implode( ' | ', $log_lines() ) . ')' );
+
+// 5h. Filtro spento: come oggi
+add_filter( 'wmwp_detail_stale_if_error', '__return_false' );
+$copy( 'poi', 8990 );
+$log_clear();
+$filter_off = wmwp_detail_fetch( 'poi', 8990 );
+remove_filter( 'wmwp_detail_stale_if_error', '__return_false' );
+$check( is_wp_error( $filter_off ) && 'wmwp_detail_unavailable' === $filter_off->get_error_code(), 'ripiego: filtro spento → wmwp_detail_unavailable' );
+$check( ! wmwp_detail_served_stale( 'poi', 8990 ), 'ripiego: filtro spento → niente segnale' );
+$check( $log_has( '[wp-package] dettaglio poi 8990 503, copia non usata: API: HTTP 500' ), 'ripiego: filtro spento, avviso del 503 con la copia non usata (' . implode( ' | ', $log_lines() ) . ')' );
+
+// 5i. 304 dal file su AWS: la copia vicina alla scadenza torna a 6 ore; lontana dalla scadenza non si riscrive
+add_filter( 'wmwp_api_urls', $with_aws, 100 );
+$fake['aws']   = 304;
+$fake['calls'] = 0;
+$timeout_key   = '_transient_timeout_wmwp_detail_json_track_8990';
+$copy( 'track', 8990, [], 30 * MINUTE_IN_SECONDS );
+$check( 'Copia' === $name_of( wmwp_detail_fetch( 'track', 8990 ) ), 'ripiego: 304 → la copia' );
+$remaining = (int) get_option( $timeout_key ) - time();
+$check( $remaining > WMWP_DETAIL_JSON_TTL - MINUTE_IN_SECONDS && $remaining <= WMWP_DETAIL_JSON_TTL, 'ripiego: 304 con la copia a 30 minuti dalla scadenza → di nuovo 6 ore (' . $remaining . ' s)' );
+$check( ! wmwp_detail_served_stale( 'track', 8990 ), 'ripiego: 304 → niente segnale' );
+$copy( 'track', 8990, [], 5 * HOUR_IN_SECONDS );
+$expires_before = (int) get_option( $timeout_key );
+wmwp_detail_fetch( 'track', 8990 );
+$check( $expires_before === (int) get_option( $timeout_key ), 'ripiego: 304 con la copia a 5 ore dalla scadenza → scadenza invariata' );
+$check( 0 === $fake['calls'], 'ripiego: 304 → nessuna richiesta all\'API' );
+remove_filter( 'wmwp_api_urls', $with_aws, 100 );
+
+// 5j. Pagina: la copia dello stesso elemento (stessa chiave della fonte) dà la pagina, segnalata
+$fake['api'] = 500;
+$copy( 'track', 6, [ 'name' => [ 'it' => 'Discesa' ], 'out_source_feature_id' => 'T-6' ] );
+$page = wmwp_detail_load( $discesa );
+$check( is_array( $page ) && 6 === ( $page['id'] ?? 0 ) && ! isset( $page['redirect'] ), 'ripiego: pagina dalla copia' );
+$check( wmwp_detail_served_stale(), 'ripiego: pagina dalla copia segnalata (header X-WMWP-Stale)' );
+
+// 5k. Copia di prima di un reset (altra chiave della fonte) e fonte giù: la lettura fresca non usa la copia, 503 e non 404
+$copy( 'track', 6, [ 'name' => [ 'it' => 'Discesa' ], 'out_source_feature_id' => 'T-OLD' ] );
+$old_copy = wmwp_detail_load( $discesa );
+$check( is_wp_error( $old_copy ) && 'wmwp_detail_unavailable' === $old_copy->get_error_code(), 'ripiego: copia di un altro elemento e fonte giù → 503, non 404' );
+
+// 5l. Indirizzo per id con la stessa copia: come con la fonte giù, l'indirizzo dell'indice senza controllo, non ''
+$copy( 'track', 6, [ 'name' => [ 'it' => 'Discesa' ], 'out_source_feature_id' => 'T-OLD' ] );
+$check( '/sentiero/discesa/' === substr( wmwp_detail_url_by_id( 'track', 6, 'it' ), -18 ), 'ripiego: indirizzo per id con la copia e la fonte giù → indirizzo dell\'indice' );
+
+// 5m. Ripresa dopo un ripiego: con il segno 'stale' scaduto e la fonte che risponde 200, esce il JSON fresco, il segnale
+// si spegne, il segno torna 1 e la copia si aggiorna
+$fake['api'] = 500;
+$copy( 'poi', 8990 );
+wmwp_detail_fetch( 'poi', 8990 );
+$check( 'stale' === get_transient( 'wmwp_detail_chk_poi_8990' ) && wmwp_detail_served_stale( 'poi', 8990 ), 'ripresa: dopo il ripiego il segno vale stale e il segnale è acceso' );
+delete_transient( 'wmwp_detail_chk_poi_8990' );
+$fake['api'] = 200;
+$recovered   = wmwp_detail_fetch( 'poi', 8990 );
+$stored      = get_transient( 'wmwp_detail_json_poi_8990' );
+$check( 'Fresca' === $name_of( $recovered ), 'ripresa: con la fonte tornata esce il JSON fresco' );
+$check( ! wmwp_detail_served_stale( 'poi', 8990 ), 'ripresa: il segnale si spegne' );
+$check( 1 === get_transient( 'wmwp_detail_chk_poi_8990' ), 'ripresa: il segno del controllo torna 1' );
+$check( is_array( $stored ) && 'Fresca' === $name_of( $stored['feature'] ?? null ), 'ripresa: la copia è aggiornata' );
+
+remove_filter( 'pre_http_request', $fake_http, 20 );
+foreach ( [ 'poi_8990', 'track_8990', 'track_6' ] as $suffix ) {
+	delete_transient( 'wmwp_detail_json_' . $suffix );
+	delete_transient( 'wmwp_detail_chk_' . $suffix );
+}
 
 false === $saved[0] ? delete_transient( 'wmwp_detail_index' ) : set_transient( 'wmwp_detail_index', $saved[0], HOUR_IN_SECONDS );
 false === $saved[1] ? delete_option( 'wmwp_detail_index_rebuilt_at' ) : update_option( 'wmwp_detail_index_rebuilt_at', $saved[1], false );

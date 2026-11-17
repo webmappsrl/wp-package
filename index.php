@@ -3,7 +3,7 @@
 Plugin Name: WP Package
 Plugin URI: https://github.com/webmappsrl/wp-package
 Description: Unified site search and detail pages for Webmapp shards: tracks and POIs from the shard APIs, sources added by the theme.
-Version: 0.3.0
+Version: 0.4.0
 Author: Webmapp
 Author URI: https://webmapp.it
 License: GPL2
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WMWP_VERSION', '0.3.0' );
+define( 'WMWP_VERSION', '0.4.0' );
 define( 'WMWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WMWP_URL', plugin_dir_url( __FILE__ ) );
 

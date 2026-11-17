@@ -4,6 +4,7 @@
 > [piano](../features/8969-pagine-di-dettaglio-di-percorsi-e-punti-di-interesse-sul-sito-wordpress/plan.md).
 > Indirizzi stabili e storico dei percorsi: oc:8983, [overview](../features/8983-indirizzi-stabili-delle-pagine-di-dettaglio-doppioni-dello-slug-e-indirizzi-vecchi/overview.md),
 > [note](../features/8983-indirizzi-stabili-delle-pagine-di-dettaglio-doppioni-dello-slug-e-indirizzi-vecchi/notes.md).
+> Copia servita quando lo shard non risponde: oc:8990, [overview](../features/8990-enti-sul-sito-wordpress-elenco-enti-dettaglio-enti-slug-e-ricerca-dallapi-di-oc8965/overview.md).
 
 ## Come funziona oggi
 
@@ -39,8 +40,14 @@ pubblica», «Mappa» e «Pagine di dettaglio». Qui c'è solo il perché delle 
   vanno ad altri elementi, anche a elementi creati in Nova il giorno dopo, quindi una riga con l'id non si può più
   controllare una per una. Un solo id cambiato invece non basta a dirlo: anche in produzione un elemento cancellato e
   reimportato cambia id.
-- **Il 503 solo quando la fonte non risponde**: un elemento che la fonte dice cancellato è un 404, non «riprova più
-  tardi»; altrimenti la pagina resta nella sitemap e i crawler riprovano un elemento che non c'è.
+- **Il 503 solo quando la fonte non risponde e una copia non c'è** (oc:8990, plugin 0.4.0): se lo shard non risponde
+  (qualunque codice diverso da 200, 304 e 404: rete, timeout, 400, 401/403, 429, 5xx; o una risposta che non è un
+  dettaglio) e in cache c'è già il JSON dell'elemento, la pagina esce dalla copia con 200, per al massimo 6 ore
+  dall'ultimo controllo riuscito. Così un guasto dello shard non spegne le pagine di tracce e POI. La risposta ha `X-WMWP-Stale: 1` e gli header no-cache, perché una cache di pagina non
+  tenga la versione vecchia oltre il guasto. Il plugin è usato da più shard, quindi il filtro
+  `wmwp_detail_stale_if_error` spegne il ripiego senza un rilascio. Un elemento che la fonte dice cancellato resta un
+  404, e la sua copia si cancella: un 503 lascerebbe la pagina nella sitemap e i crawler riproverebbero un elemento che
+  non c'è.
 - **Redirect temporaneo per l'indirizzo per id**: la destinazione cambia con una rinomina o un reset, e un 301
   resterebbe nella cache del browser. Prima del redirect si controlla l'elemento, perché la ricerca legge
   Elasticsearch dal vivo e può avere elementi più nuovi dell'indice.
@@ -57,6 +64,9 @@ pubblica», «Mappa» e «Pagine di dettaglio». Qui c'è solo il perché delle 
 - La review interna di oc:8969 ha mostrato che l'indirizzo per id non controllava l'elemento e non ricostruiva
   l'indice (una traccia nuova dava 404) e che un elemento cancellato rispondeva 503: da qui il controllo prima del
   redirect e la distinzione fra 404 e 503 della fonte.
+- **503 a ogni guasto della fonte** (oc:8969, superato da oc:8990): gli errori non andavano in cache, e lo shard che
+  non rispondeva dava 503 anche con il JSON dell'elemento salvato da pochi minuti. Il ripiego sulla copia (fino a 6
+  ore, spento dal filtro `wmwp_detail_stale_if_error`) evita che un guasto dello shard spenga le pagine.
 - **Doppioni con `-<id>`, poi con `-<chiave stabile>`** (oc:8969, superati da oc:8983): l'id cambiava con il reset, e
   la chiave stabile risolveva solo quello. Restavano tre problemi: all'arrivo di un omonimo tutti i doppioni prendevano
   il suffisso, quindi anche chi c'era cambiava indirizzo; il 301 di una rinomina valeva solo finché il percorso vecchio

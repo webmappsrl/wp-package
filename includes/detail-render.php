@@ -4,7 +4,8 @@
  *
  * Il JSON si legge dal file della traccia su AWS (o MinIO) e dall'API dello shard (`api/ec/poi/<id>`, e
  * `api/ec/track/<id>` se il file non c'è), con una cache breve (`wmwp_detail_cache_ttl`, 60 s) e la richiesta
- * condizionale al file: i dati sono quelli del backend entro un minuto. Prima di stampare si controlla che l'id porti ancora all'elemento chiesto (dopo un reset
+ * condizionale al file: i dati sono quelli del backend entro un minuto. Se la fonte non risponde si serve la copia in
+ * cache, se c'è (oc:8990, header `X-WMWP-Stale: 1`). Prima di stampare si controlla che l'id porti ancora all'elemento chiesto (dopo un reset
  * dello shard gli id cambiano): la chiave stabile della fonte (`wmwp_detail_source()`) se c'è nel dettaglio e
  * nell'indice, altrimenti lo slug del nome. Il template si cerca prima nel tema (`wp-package/<tipo>.php`).
  */
@@ -13,10 +14,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Valore del segno del controllo quando la fonte non ha risposto e si è servita la copia: per la cache breve le visite
+// leggono la copia senza richiamare la fonte, e la pagina resta segnalata
+const WMWP_DETAIL_STALE_MARK = 'stale';
+
 /**
  * JSON del dettaglio (una Feature), o WP_Error: `wmwp_detail_not_found` se lo shard dice che l'elemento non c'è (404:
- * cancellato, o id inesistente), `wmwp_detail_unavailable` se la fonte non risponde (rete, timeout, 5xx). Sul file
- * della traccia decide l'API dello shard: un file che manca su AWS non basta a dire che la traccia non c'è.
+ * cancellato, o id inesistente), `wmwp_detail_unavailable` se la fonte non risponde (rete, timeout, codice diverso da
+ * 200, 304 e 404, risposta che non è una feature) e non c'è una copia da servire. Sul file della traccia decide l'API
+ * dello shard: un file che manca su AWS non basta a dire che la traccia non c'è.
+ *
+ * Con la fonte che non risponde si restituisce la copia in cache, se c'è (oc:8990): il controllo conta come fatto per
+ * la cache breve, nel log va un avviso e wmwp_detail_served_stale() lo dice alla pagina. Il ripiego non vale con
+ * `$fresh = true`, che chiede il verdetto della fonte, né con il filtro `wmwp_detail_stale_if_error` a false. Il 404
+ * della fonte resta un 404 anche con la copia.
  *
  * @return array<string, mixed>|WP_Error
  */
@@ -39,34 +50,84 @@ function wmwp_detail_fetch( string $type, int $id, bool $fresh = false ) {
 	$checked = 'wmwp_detail_chk_' . $type . '_' . $id;
 	$cached  = $ttl > 0 ? get_transient( $key ) : false;
 	$cached  = is_array( $cached ) && is_array( $cached['feature'] ?? null ) ? $cached : null;
-	if ( null !== $cached && ! $fresh && false !== get_transient( $checked ) ) {
+	// Il segnale della copia dice com'è andata l'ultima lettura di questo dettaglio: si accende solo se esce dalla copia
+	$flag = $type . '/' . $id;
+	unset( $GLOBALS['wmwp_detail_stale'][ $flag ] );
+	$mark = null !== $cached && ! $fresh ? get_transient( $checked ) : false;
+	if ( false !== $mark ) {
+		if ( WMWP_DETAIL_STALE_MARK === $mark ) {
+			// Nella cache breve dopo un controllo fallito: è ancora la copia che la fonte non ha confermato
+			$GLOBALS['wmwp_detail_stale'][ $flag ] = true;
+		}
 		return $cached['feature'];
 	}
 
 	// La traccia dal file che lo shard pubblica su AWS, lo stesso che restituisce l'API; il POI un file non lo ha
-	$entry = null;
+	$entry  = null;
+	$reason = '';
 	if ( 'track' === $type && '' !== $urls['aws_api'] ) {
-		$entry = wmwp_detail_fetch_file( $urls['aws_api'] . '/tracks/' . $id . '.json', $cached );
+		$entry  = wmwp_detail_fetch_file( $urls['aws_api'] . '/tracks/' . $id . '.json', $cached, $reason );
+		$reason = '' !== $reason ? 'file AWS: ' . $reason . '; ' : '';
 	}
 	if ( null === $entry ) {
 		$api = wmwp_http_json( wmwp_server_url( $origin . '/api/ec/' . $type . '/' . $id ), WMWP_DETAIL_TIMEOUT );
 		if ( 404 === $api['code'] ) {
+			if ( null !== $cached ) {
+				// L'elemento non c'è più: la sua copia non deve uscire al prossimo errore della fonte
+				delete_transient( $key );
+				delete_transient( $checked );
+			}
 			return new WP_Error( 'wmwp_detail_not_found', __( 'Detail not found', 'wp-package' ) );
 		}
 		$entry = wmwp_detail_is_feature( $api['data'] ) ? [ 'feature' => $api['data'] ] : null;
+		if ( null === $entry ) {
+			$reason .= 'API: ' . wmwp_detail_failure_reason( (int) $api['code'], (string) $api['error'] );
+		}
 	}
 	if ( null === $entry ) {
+		/**
+		 * Con la fonte che non risponde il dettaglio esce dalla copia in cache, se c'è, invece del 503 (oc:8990). false
+		 * torna al 503 senza un rilascio del plugin.
+		 *
+		 * @param bool   $stale Servire la copia (predefinito true).
+		 * @param string $type  Tipo del dettaglio (`track`, `poi`).
+		 * @param int    $id    Id dello shard.
+		 */
+		if ( null !== $cached && ! $fresh && (bool) apply_filters( 'wmwp_detail_stale_if_error', true, $type, $id ) ) {
+			// Il controllo conta come fatto per la cache breve: le visite del minuto dopo non richiamano la fonte, e
+			// nel log va un avviso per controllo
+			set_transient( $checked, WMWP_DETAIL_STALE_MARK, $ttl );
+			$GLOBALS['wmwp_detail_stale'][ $flag ] = true;
+			error_log( sprintf( '[wp-package] dettaglio %s %d dalla copia, fonte non raggiungibile: %s', $type, $id, $reason ) );
+			return $cached['feature'];
+		}
+		error_log( sprintf( '[wp-package] dettaglio %s %d 503, %s: %s', $type, $id, null === $cached ? 'nessuna copia' : 'copia non usata', $reason ) );
 		return new WP_Error( 'wmwp_detail_unavailable', __( 'Detail not available', 'wp-package' ) );
 	}
 	if ( $ttl > 0 ) {
-		// Il JSON resta WMWP_DETAIL_JSON_TTL: dopo la cache breve si richiede con ETag/Last-Modified, e con il 304 si riusa
+		// Il JSON si scrive per WMWP_DETAIL_JSON_TTL: dopo la cache breve si richiede con ETag/Last-Modified, e con il 304
+		// si riusa. Con il 304 la copia si riscrive solo quando le resta meno di un'ora, per non scrivere nel database a
+		// ogni controllo: dopo l'ultimo controllo riuscito resta quindi almeno un'ora e al massimo WMWP_DETAIL_JSON_TTL
+		// (con una object cache esterna la scadenza non si legge e la copia si riscrive a ogni 304, in memoria)
 		if ( empty( $entry['not_modified'] ) ) {
 			unset( $entry['not_modified'] );
 			set_transient( $key, $entry, WMWP_DETAIL_JSON_TTL );
+		} elseif ( (int) get_option( '_transient_timeout_' . $key ) - time() < HOUR_IN_SECONDS ) {
+			set_transient( $key, $cached, WMWP_DETAIL_JSON_TTL );
 		}
 		set_transient( $checked, 1, $ttl );
 	}
 	return $entry['feature'];
+}
+
+/**
+ * Vero se in questa richiesta un dettaglio è uscito dalla copia in cache perché la fonte non ha risposto (oc:8990): la
+ * pagina lo dice con l'header `X-WMWP-Stale: 1`. Conta l'ultima lettura di ogni dettaglio, quindi una rilettura che
+ * riesce spegne il segnale. Con tipo e id vale solo per quel dettaglio.
+ */
+function wmwp_detail_served_stale( string $type = '', int $id = 0 ): bool {
+	$stale = (array) ( $GLOBALS['wmwp_detail_stale'] ?? [] );
+	return '' === $type ? [] !== $stale : ! empty( $stale[ $type . '/' . $id ] );
 }
 
 /**
@@ -79,15 +140,32 @@ function wmwp_detail_is_feature( $feature ): bool {
 }
 
 /**
+ * Motivo di un fallimento per il log: il messaggio dell'errore di rete se c'è, altrimenti la risposta che non è una
+ * feature (codice 200) o il codice HTTP.
+ *
+ * @param int    $code  Codice HTTP (0 senza risposta).
+ * @param string $error Messaggio dell'errore di rete, vuoto se la richiesta è arrivata.
+ */
+function wmwp_detail_failure_reason( int $code, string $error ): string {
+	if ( '' !== $error ) {
+		return $error;
+	}
+	return 200 === $code ? 'risposta che non è una feature' : 'HTTP ' . $code;
+}
+
+/**
  * File del dettaglio pubblicato dallo shard all'indirizzo `awsApi` di `environment.ts` (S3 o MinIO, per il plugin è lo
  * stesso), con la richiesta condizionale quando
  * c'è già una copia: `If-None-Match` con l'ETag, `If-Modified-Since` con la data. Con il 304 torna la copia; null se il
  * file non c'è o non risponde, e allora si legge l'API dello shard.
  *
  * @param array<string, mixed>|null $cached Copia in cache: `feature`, `etag`, `modified`.
+ * @param string                    $reason Motivo per il log quando torna null: messaggio dell'errore di rete, codice
+ *                                          HTTP o risposta che non è una feature; '' altrimenti.
  * @return array{feature: array<string, mixed>, etag: string, modified: string, not_modified?: bool}|null
  */
-function wmwp_detail_fetch_file( string $url, ?array $cached ): ?array {
+function wmwp_detail_fetch_file( string $url, ?array $cached, string &$reason = '' ): ?array {
+	$reason  = '';
 	$headers = [];
 	if ( null !== $cached && '' !== (string) ( $cached['etag'] ?? '' ) ) {
 		$headers['If-None-Match'] = (string) $cached['etag'];
@@ -102,6 +180,7 @@ function wmwp_detail_fetch_file( string $url, ?array $cached ): ?array {
 		]
 	);
 	if ( is_wp_error( $response ) ) {
+		$reason = $response->get_error_message();
 		return null;
 	}
 	$code = (int) wp_remote_retrieve_response_code( $response );
@@ -115,6 +194,7 @@ function wmwp_detail_fetch_file( string $url, ?array $cached ): ?array {
 	}
 	$feature = 200 === $code ? json_decode( (string) wp_remote_retrieve_body( $response ), true ) : null;
 	if ( ! wmwp_detail_is_feature( $feature ) ) {
+		$reason = wmwp_detail_failure_reason( $code, '' );
 		return null;
 	}
 	return [
@@ -350,6 +430,12 @@ add_action(
 		$wp_query->is_404       = false;
 		$wp_query->is_home      = false;
 		status_header( 200 );
+		if ( wmwp_detail_served_stale() ) {
+			// Pagina servita dalla copia in cache: la fonte non ha risposto (oc:8990). Come il 503, non va tenuta da una
+			// cache di pagina o da una CDN oltre il guasto
+			header( 'X-WMWP-Stale: 1' );
+			nocache_headers();
+		}
 	},
 	2
 );
