@@ -12,10 +12,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Richiesta GET con il JSON della risposta: stato HTTP (0 se la richiesta non è arrivata: rete, timeout), dati
  * decodificati (anche una stringa JSON dentro un JSON, come pois.geojson sul dev; null se non è JSON o lo stato non è
- * 200) e risposta grezza, per le intestazioni. L'indirizzo si usa com'è: per lo shard passa da wmwp_server_url().
+ * 200), risposta grezza, per le intestazioni, e messaggio dell'errore di rete (stringa vuota se la richiesta ha avuto
+ * risposta). L'indirizzo si usa com'è: per lo shard passa da wmwp_server_url().
  *
  * @param array<string, string> $headers Intestazioni della richiesta.
- * @return array{code: int, data: array<mixed>|null, response: array<string, mixed>|null}
+ * @return array{code: int, data: array<mixed>|null, response: array<string, mixed>|null, error: string}
  */
 function wmwp_http_json( string $url, int $timeout, array $headers = [] ): array {
 	$response = wp_remote_get(
@@ -30,6 +31,7 @@ function wmwp_http_json( string $url, int $timeout, array $headers = [] ): array
 			'code'     => 0,
 			'data'     => null,
 			'response' => null,
+			'error'    => $response->get_error_message(),
 		];
 	}
 	$code = (int) wp_remote_retrieve_response_code( $response );
@@ -44,5 +46,6 @@ function wmwp_http_json( string $url, int $timeout, array $headers = [] ): array
 		'code'     => $code,
 		'data'     => is_array( $data ) ? $data : null,
 		'response' => $response,
+		'error'    => '',
 	];
 }
