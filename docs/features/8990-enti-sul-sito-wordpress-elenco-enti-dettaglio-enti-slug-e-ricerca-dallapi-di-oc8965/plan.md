@@ -60,7 +60,7 @@ il messaggio dell'errore di rete.
 - [x] **Passo 3:** aggiungere `'error'` nei due rami di ritorno di `wmwp_http_json()`.
 - [x] **Passo 4:** stesso comando → `PASS`; rilanciare anche `tests/php/shards-fallback.php` e
   `tests/php/detail-render.php` → `PASS`.
-- [ ] **Passo 5 (per il dev):** `git commit -m "feat(oc:8990): messaggio dell'errore di rete in wmwp_http_json"`
+- [x] **Passo 5 (per il dev, 17/11, unito al commit del task 2):** `git commit -m "feat(oc:8990): messaggio dell'errore di rete in wmwp_http_json"`
 
 ### Task 2: ripiego sulla copia in `wmwp_detail_fetch()`
 
@@ -106,7 +106,7 @@ il messaggio dell'errore di rete.
 - [x] **Passo 4:** header `X-WMWP-Stale: 1` dove la pagina del dettaglio manda i suoi header, solo se
   `wmwp_detail_served_stale()`.
 - [x] **Passo 5:** stesso comando del passo 2 → `PASS`; rilanciare tutti i `tests/php/*.php` → `PASS`.
-- [ ] **Passo 6 (per il dev):** `git commit -m "feat(oc:8990): copia del dettaglio quando lo shard non risponde"`
+- [x] **Passo 6 (per il dev, 17/11):** `git commit -m "feat(oc:8990): copia del dettaglio quando lo shard non risponde"`
 
 ### Task 3: documentazione del plugin
 
@@ -119,7 +119,7 @@ il messaggio dell'errore di rete.
 
 - [x] **Passo 1:** riscrivere le due righe del README: gli errori non vanno in cache, ma una copia già in cache
   si serve quando la fonte non risponde (fino a 6 ore dall'ultimo controllo riuscito); 503 solo senza copia.
-- [ ] **Passo 2 (per il dev):** `git commit -m "docs(oc:8990): copia dei dettagli quando lo shard non risponde"`
+- [x] **Passo 2 (per il dev, 17/11):** `git commit -m "docs(oc:8990): copia dei dettagli quando lo shard non risponde"`
 
 ### Task 4: aggiornare il plugin in `wp-forestas`
 
