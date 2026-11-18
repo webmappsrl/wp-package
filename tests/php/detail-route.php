@@ -11,6 +11,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 require __DIR__ . '/history-sandbox.php';
+// Le tracce di prova hanno il tipo in `route-type`: dalla 0.5.0 la famiglia la indica il tema
+// (wmwp_track_kind_taxonomy, oc:9000), qui la indica il test, così non dipende dal tema attivo
+add_filter( 'wmwp_track_kind_taxonomy', fn() => 'route-type', 99 );
 
 $failures = [];
 $check    = function ( bool $ok, string $what ) use ( &$failures ) {

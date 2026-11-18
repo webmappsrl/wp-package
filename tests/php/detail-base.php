@@ -1,7 +1,8 @@
 <?php
 /**
  * Test (oc:8969): base degli indirizzi dei dettagli. Con l'interruttore spento la base è il nome del tipo nella lingua
- * (`route-type`/`poi-type`), con ripiego `track`/`poi`; acceso, è il percorso della pagina scelta.
+ * (per le tracce la famiglia di `wmwp_track_kind_taxonomy`, per i POI `poi-type`), con ripiego `track`/`poi`; acceso, è
+ * il percorso della pagina scelta.
  * Si lancia con: wp eval-file tests/php/detail-base.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1.
  */

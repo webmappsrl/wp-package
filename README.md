@@ -33,7 +33,21 @@ condividere.
 La source dei percorsi (`tracks`) chiede all'API Elasticsearch solo il testo: la risposta contiene tutti i
 percorsi trovati, e filtri, conteggi e pagine si calcolano nel browser (`assets/js/search-logic.js`). Un clic su
 un filtro non scarica niente. Funziona finché l'API restituisce tutti i risultati in una risposta: se un giorno
-la pagina, i conteggi devono tornare all'API.
+la pagina, i conteggi devono tornare all'API. Senza testo cercato i percorsi sono in ordine alfabetico sul nome
+italiano senza spazi ai lati, con il confronto dello shard (`rankByText`); con un testo, prima quelli che lo hanno nel
+nome.
+
+La source dei punti di interesse (`pois`, oc:9000) non scarica niente nel browser: chiede alla rotta REST
+`GET wmwp/v1/pois` del plugin (`includes/search-pois.php`, `assets/js/source-pois.js`), che cerca in una copia ridotta
+di `pois.geojson` e calcola pagine e faccetta dei tipi sul server (il file pesa 6 MB). Parametri: `q`, `page`,
+`per_page` (al massimo 48), `lang`, `poi_type[]`. Risposta: `total`, `items` (nel formato delle card, vedi
+«JavaScript») e `facets` (la faccetta `poi-type`, i cui valori portano `lang`). La ricerca cerca nella lingua della
+pagina con ripiego sull'italiano; un tipo scelto resta nella faccetta anche con 0 risultati. La copia sta
+nell'opzione `wmwp_poi_search_copy` (senza autoload) e si scrive con la ricostruzione dell'indice dei dettagli, dallo
+stesso download di `pois.geojson`, solo quando l'indice accetta il nuovo elenco; la disattivazione la toglie e
+`uninstall.php` la cancella; un'app senza POI ha una copia vuota (0 risultati). Senza copia (subito dopo
+l'aggiornamento, o con un sito nuovo), o con una copia di un formato precedente (testo cercabile in una stringa sola),
+la rotta risponde 503 e programma subito la ricostruzione dell'indice, invece di aspettare il cron orario.
 
 ## Interfaccia pubblica
 
@@ -60,7 +74,13 @@ dettaglio con `{id}` e `{ref}`; vuoto = card senza link), `badge_field` (campo d
 `terms.validation-status`; vuoto = nessuna etichetta; classe `wmwp-badge--<identifier>`), `meta_facet` (`key` del filtro i cui
 valori vanno all'inizio della riga, es. i comuni), `term_labels` (identifier → nome, per tipo ed etichetta di stato
 nella lingua della pagina: l'API dà i nomi dei termini solo in italiano; senza, il nome dell'API). Con un testo
-cercato i percorsi che lo hanno nel nome vengono prima (l'API ordina per nome).
+cercato i percorsi che lo hanno nel nome vengono prima (l'API ordina per nome). `kind_field` (percorso nel risultato
+della famiglia che dà il tipo sulla card, es. `terms.route-type`; calcolato dal filtro `wmwp_track_kind_taxonomy`,
+vuoto = nessun tipo) e `badge_exclude` (identifier del campo `badge_field` che non mostrano l'etichetta, es. lo stato
+«non lo sappiamo»).
+
+Chiavi della source `pois`: `endpoint` (la rotta `wmwp/v1/pois`, calcolata) e `type_label` (testo del tipo sulla card al
+posto di «Point of interest»; la faccetta di base `poi-type` ha `label` «Type»).
 
 Selezione e scarico di più percorsi, sempre della source `tracks`: `download_url` (calcolato dalle impostazioni:
 `<origin dello shard>/api/ec/track/multiple`; vuoto = niente caselle né barra), `download_name` (nome di base del
@@ -79,7 +99,9 @@ tab e pagina, ma non sta nell'indirizzo.
 Un filtro è un array con `key` (nome del parametro nell'indirizzo), `label`, `type` (`list` per un elenco di
 stringhe, `terms` per un elenco di `{identifier, name}`), `field` (percorso nel risultato, es.
 `terms.hiking-difficulty`), e facoltativi `exclude_prefix`, `labels` (id → nome), `order` (elenco di id),
-`disabled` e `help` (filtro visibile ma spento), `groups` (fasce: `[{id, label, values: [id…]}]`, più valori sotto una
+`disabled` e `help` (filtro visibile ma spento), `missing` (identifier che vale per i risultati senza il campo, nel
+filtro e nei conteggi: es. le tracce senza percorribilità contano come «Sconosciuta»; il testo viene da `labels`),
+`groups` (fasce: `[{id, label, values: [id…]}]`, più valori sotto una
 voce sola, che nell'indirizzo porta l'`id` della fascia). `include` / `include_pattern` tengono solo i valori dell'elenco o
 dell'espressione regolare, `exclude` / `exclude_pattern` li tolgono: con più filtri sullo stesso campo si divide un
 campo misto (es. `taxonomyWheres` in aree, province e comuni). OR dentro un filtro, AND fra filtri; i conteggi di un filtro si
@@ -100,6 +122,16 @@ del server WordPress, se diverso da quello del browser (es. WordPress in Docker:
 Vale per tutte le richieste del server allo shard (config.json dell'app per carta e colori, indice e dettagli), che
 passano da `wmwp_server_url()`.
 
+**`wmwp_track_kind_taxonomy`** — identifier della famiglia di tassonomia che dà il tipo delle tracce (predefinito `''`):
+la base degli indirizzi, il `kind` dell'indice dei dettagli e il tipo sulle card (`kind_field`). Il plugin non legge
+più `route-type`, famiglia che nasce in uno shard e non in wm-package: senza il filtro le tracce non hanno tipo e la
+base è `/track/`; un tema che vuole gli indirizzi di prima lo aggiunge (es. Forestas: `route-type`)
+(`wmwp_track_kind_taxonomy()`, `includes/detail-base.php`).
+**`wmwp_status_families`** — famiglie «a stati» del registro (`includes/status.php`): identifier → `absent` (stato di
+assenza, null se non c'è) e `states` (`[{identifier, name}]` con i nomi per lingua, nell'ordine dello shard; il primo
+è di solito l'assenza). Di base c'è la percorribilità di wm-package. **`wmwp_walkability_taxonomy`** — identifier della
+famiglia della percorribilità (predefinito `walkability-status`, come
+`wm-package.features.trail_registry.walkability_taxonomy` dello shard).
 **`wmwp_detail_items`** — elementi dell'indice dei dettagli (`type`, `id`, `names`, `kind`, `source`) prima della
 costruzione; togliere un elemento libera i suoi percorsi, come se non esistesse più. **`wmwp_detail_source`** —
 chiave stabile di una traccia o di un POI (`$source`, `$type`, `$props`), che non cambia quando lo shard rinumera gli
@@ -126,8 +158,12 @@ risponde».
 - `signal` = `AbortSignal` della ricerca: una ricerca nuova annulla la precedente, e dopo 15 secondi senza risposta
   la source va in errore (nel tab «—»); ogni source parte da sola, senza aspettare le altre;
 - restituisce `Promise<{ total, items, facets?, summary?, ids? }>`, dove ogni elemento di `items` è
-  `{ id, title, url|null, typeKey, typeLabel, image: {src, alt}|null, code|null, meta: string[], badge: {key, label}|null }`,
-  `facets` è `[{ key, label, disabled, values: [{ id, label, count, selected }] }]` e `ids` sono gli id di tutti i
+  `{ id, title, url|null, typeKey, typeLabel, image: {src, alt}|null, code|null, meta: string[], badge: {key, label}|null }`
+  (facoltativi `titleLang` e `metaLang`: la lingua da cui viene il testo, quando ripiega su un'altra, perché
+  la Card lo marchi con `lang`, WCAG 3.1.2),
+  `facets` è `[{ key, label, disabled, values: [{ id, label, count, selected, lang? }] }]` (`lang` marca il nome del
+  valore se ripiega su un'altra lingua; `L.langFor( testo, pagina )` in `assets/js/search-logic.js` dà il valore
+  dell'attributo, `''` se è la lingua della pagina o non si sa) e `ids` sono gli id di tutti i
   risultati della ricerca (per «Seleziona tutti»).
 
 Una source permette la selezione e lo scarico di più risultati se registra anche `selection` («Seleziona tutti»
@@ -171,7 +207,27 @@ Si sostituiscono copiandoli in `wp-package/` nel tema: `search.php` (scheletro),
 dettagli `track.php`, `poi.php` e `detail-unavailable.php`, che ricevono `$detail` (`wmwp_detail_current()`: `type`,
 `id`, `lang`, `path`, `name`, `url`, `urls` per lingua, `feature` con il JSON dello shard, le cui chiavi possono mancare)
 e aprono e chiudono la pagina con `wmwp_template_header()`/`wmwp_template_footer()` (temi classici e a blocchi). Sul
-`body` dei dettagli: `wmwp-detail`, `wmwp-detail-<type>`.
+`body` dei dettagli: `wmwp-detail`, `wmwp-detail-<type>`. Il `track.php` di base mostra anche l'avviso del sentiero e la
+percorribilità (`wmwp_track_notice()`, `wmwp_walkability()`), con una resa semplice che il tema sostituisce (oc:9000).
+
+Letture dei dati del dettaglio, per i temi (oc:9000; `includes/detail-data.php`, `status.php`, `detail-status.php`):
+restituiscono dati, mai markup, e non hanno testi visibili; la grafica e le regole del sito (per esempio quali zone
+mostrare) restano al tema. `$properties` sono le `properties` del JSON del dettaglio.
+
+| Funzione | Restituisce |
+|---|---|
+| `wmwp_text( $value, $lang )` | `{ text, lang }`: testo nella lingua, poi in italiano, poi la prima lingua non vuota; `lang` è la lingua da cui viene (null per un valore senza lingue), per marcare con `lang` un ripiego. Una lista per lingua si unisce con un a capo |
+| `wmwp_detail_blocks( $properties, $lang )` | righe dei Blocchi Dettaglio (`config_detail`, blocchi `info`): `{ title, title_lang, content }`, `content` è il valore per lingua (HTML); le righe senza testo si saltano |
+| `wmwp_detail_gallery( $properties, $lang )` | foto di `image_gallery`: `{ url, thumbnail, caption, author, credits }` (miniatura 400x200, poi `thumbnail`, poi l'immagine intera) |
+| `wmwp_detail_feature_image( $properties, $lang )` | foto principale: `{ url, large, caption, author, credits }` (`large` = 1440x500 o l'immagine intera); null senza foto |
+| `wmwp_detail_related_pois( $properties, $lang )` | POI correlati: `{ id, name, type, image, coordinates }`, `type` il primo di `wmwp_detail_poi_types()`, `coordinates` = `[lon, lat]` se la geometria è un punto (per la mappa); l'indirizzo lo aggiunge il tema con `wmwp_detail_url()` |
+| `wmwp_detail_stats( $properties )` | `distance` (km), `ascent`, `descent`, `ele_min`, `ele_max` (m), `duration_forward` (minuti); `null` se assente o non numerico |
+| `wmwp_detail_places( $properties, $lang, $source )` | zone `where`: `{ identifier, name, admin_level }` (8 comune, 6 provincia, 4 regione, null senza livello); `$source` è `taxonomies` (predefinito) o `taxonomy_where`; i nomi uguali all'identifier non contano |
+| `wmwp_detail_poi_types( $properties, $lang )` | tipi del POI: `{ identifier, name, lang }`, dal formato vecchio `taxonomy.poi_type` se il nuovo manca |
+| `wmwp_walkability( $properties, $lang )` | percorribilità: `identifier`, `name`, `name_lang`, `level`, `total`, `absent`, `note`, `note_lang`, `updated_at`; la data c'è solo se lo stato l'ha messo una persona (`walkability.user` non null), perché quello dell'import ha la data dell'import |
+| `wmwp_track_notice( $properties, $lang )` | avviso del sentiero `{ message, lang, updated_at }`, null se spento (`not_accessible` letto con `FILTER_VALIDATE_BOOLEAN`, come `EcTrack::isNotAccessibleOn()` dello shard) o senza messaggio |
+| `wmwp_status_families()`, `wmwp_walkability_taxonomy()`, `wmwp_status_name( $family, $identifier, $lang )` | registro degli stati (filtri sopra) e nome di uno stato nella lingua, `{ text, lang }` |
+| `wmwp_status_level( $family, $identifier )` | `{ level, total, known }` per gli indicatori a tacche: `total` è il numero degli stati della famiglia (assenza compresa), `level` la posizione dello stato (da 1); lo stato di assenza, il termine mancante e una famiglia o uno stato sconosciuti valgono 0 (`known` falso per un identifier che il registro non ha: si mostra a parole, senza tacche). Percorribilità: 4 tacche, «Non percorribile» ne accende 2 |
 
 Funzioni dei dettagli per i temi: `wmwp_detail_url( $type, $id, $lang )` (indirizzo dall'indice, '' se l'elemento non
 c'è; `$lang` è il codice WPML, es. `en-us`), `wmwp_detail_urls( $type, $id )` (lingua → indirizzo),
@@ -326,8 +382,9 @@ testo; '' se il nome non c'è. Il nome di solito è `icon_name` di un termine ne
 si scarica solo per un nome mai chiesto; gli SVG dei nomi già chiesti restano in cache un giorno (transient
 `wmwp_icons`), un'ora se il set non risponde (oc:8969).
 
-- **Base**, per tracce e POI, nelle impostazioni «WP Package»: dal tipo (il nome del `route-type` o del `poi-type`
-  nella lingua, `track`/`poi` se manca) oppure, con «Indirizzo sotto una pagina», il percorso della pagina scelta.
+- **Base**, per tracce e POI, nelle impostazioni «WP Package»: dal tipo (per le tracce il nome del termine della
+  famiglia indicata dal filtro `wmwp_track_kind_taxonomy`, per i POI del `poi-type`, nella lingua; `track`/`poi` se
+  manca, e per le tracce senza filtro è sempre `track`) oppure, con «Indirizzo sotto una pagina», il percorso della pagina scelta.
   Le opzioni sono `wmwp_detail_tracks_use_page`, `wmwp_detail_tracks_page`, `wmwp_detail_pois_use_page`,
   `wmwp_detail_pois_page`: un tema le impone con `pre_option_<nome>`.
 - **Slug**: il nome nella lingua della pagina (italiano se manca) passato in `sanitize_title`. Fra i doppioni nella
@@ -393,7 +450,7 @@ Testi di base in inglese, traduzione italiana in `languages/`. Per rigenerarle c
 
 ## Test
 
-`node --test tests/js/*.test.js` prova la logica pura della ricerca, la source `tracks` (in una finestra finta, con
+`node --test tests/js/*.test.js` prova la logica pura della ricerca, la source `tracks` e la source `pois` (`source-pois.test.js`; in una finestra finta, con
 l'API finta), le tracce da `api/ec/track/multiple` (con un fetch finto), le tracce per la mappa e la conversione in
 GPX, KML e GeoJSON (Node 18 o successivo; con Node 22 `node --test tests/js/` senza `*.test.js` non trova i file).
 Con WP-CLI, dalla cartella di WordPress: `wp eval-file <plugin>/tests/php/shards-fallback.php` prova la
@@ -402,7 +459,12 @@ dal `config.json` dell'app (risposte finte), `search-params.php` i nomi dei para
 non possono essere query var di WordPress, `detail-index.php`, `detail-base.php`, `detail-cache.php`, `detail-aws.php`, `icons.php`, `map-detail.php`, `webapp-url.php`,
 `detail-route.php`, `detail-render.php`, `detail-seo.php`, `detail-sitemap.php`, `detail-history.php` le pagine di
 dettaglio (slug, basi, cache dell'indice con lo shard finto, risoluzione e redirect, controllo dell'elemento, meta,
-sitemap e hreflang, storico dei percorsi). I `detail-*.php` girano sul sito vero: includono `history-sandbox.php`, che
-fa usare allo storico una tabella di prova cancellata alla fine, anche se il test si interrompe, così le righe di prova
-non riservano percorsi agli elementi veri. Test e sorgente della mappa restano fuori dall'archivio del repo
+sitemap e hreflang, storico dei percorsi); `detail-data.php` le letture dei dati del dettaglio, `detail-kind.php` il
+tipo delle tracce dal filtro `wmwp_track_kind_taxonomy` (base e indice), `detail-status.php` percorribilità e avviso,
+`status.php` il registro degli stati e le tacche, `search-pois.php` la source dei POI (copia e rotta `wmwp/v1/pois`).
+I test che toccano l'indice (`detail-aws`, `detail-base`, `detail-cache`, `detail-history`, `detail-index`,
+`detail-render`, `detail-route`, `detail-seo`, `detail-sitemap` e `search-pois.php`) girano sul sito vero e includono
+`history-sandbox.php`, che fa usare allo storico una tabella di prova cancellata alla fine, anche se il test si
+interrompe, così le righe di prova non riservano percorsi agli elementi veri; `detail-data.php`, `detail-kind.php` e
+`detail-status.php` non la includono. Test e sorgente della mappa restano fuori dall'archivio del repo
 (`.gitattributes`).

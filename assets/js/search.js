@@ -428,21 +428,26 @@
         (image.closest('.wmwp-card__media') || image).remove();
       }
     }
-    var setText = function (name, value) {
+    // `lang` sul testo che ripiega su un'altra lingua (titleLang e metaLang della card; oc:9000)
+    var setText = function (name, value, textLang) {
       var element = part(name);
       if (!element) {
         return;
       }
       if (value) {
         element.textContent = value;
+        var lang = L.langFor(textLang, config.lang);
+        if (lang) {
+          element.setAttribute('lang', lang);
+        }
       } else {
         element.remove();
       }
     };
     setText('type', item.typeLabel);
     setText('code', item.code);
-    setText('title', item.title);
-    setText('meta', (item.meta || []).filter(Boolean).join(' · '));
+    setText('title', item.title, item.titleLang);
+    setText('meta', (item.meta || []).filter(Boolean).join(' · '), item.metaLang);
     var badge = part('badge');
     if (badge) {
       if (item.badge && item.badge.label) {
@@ -1054,6 +1059,10 @@
         var name = document.createElement('span');
         name.className = 'wmwp-facet__label';
         name.textContent = value.label;
+        var valueLang = L.langFor(value.lang, config.lang);
+        if (valueLang) {
+          name.setAttribute('lang', valueLang);
+        }
         // Il numero si vede da solo; lo screen reader legge «Sentiero, 34 percorsi» invece di «Sentiero34»
         var count = document.createElement('span');
         count.className = 'wmwp-facet__count';

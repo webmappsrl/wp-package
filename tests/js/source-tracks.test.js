@@ -89,12 +89,21 @@ test('la card toglie spazi e tab da nome e codice e costruisce l\'indirizzo da l
 
 test('tipo e stato prendono il nome dal tema (term_labels), se no il nome italiano dell\'API', async () => {
   const labels = { 'route-type-trail': 'Trail', validated: 'Validated' };
-  const en = await load({ lang: 'en', source: { term_labels: labels } }).impl.search(query({ lang: 'en' }));
+  const kind = { kind_field: 'terms.route-type' };
+  const en = await load({ lang: 'en', source: Object.assign({ term_labels: labels }, kind) }).impl.search(query({ lang: 'en' }));
   const card = en.items.find((item) => item.id === 473);
+  assert.equal(card.typeKey, 'route-type-trail');
   assert.equal(card.typeLabel, 'Trail');
   assert.deepEqual(card.badge, { key: 'validated', label: 'Validated' });
-  const it = await load().impl.search(query());
+  const it = await load({ source: kind }).impl.search(query());
   assert.equal(it.items.find((item) => item.id === 473).typeLabel, 'Sentiero');
+});
+
+test('senza kind_field (oc:9000) la card non ha tipo: il plugin non conosce route-type', async () => {
+  const result = await load().impl.search(query());
+  const card = result.items.find((item) => item.id === 473);
+  assert.equal(card.typeKey, '');
+  assert.equal(card.typeLabel, '');
 });
 
 test('l\'indirizzo per id del dettaglio (link_template predefinito, oc:8969) porta l\'id nella query', async () => {
@@ -132,4 +141,12 @@ test('la stessa ricerca non si chiede due volte; oltre sei testi si toglie il me
   await impl.search(query({ text: 'g' }));
   await impl.search(query({ text: 'b' }));
   assert.equal(calls.search.length, 8, '«b» era il meno recente ed è uscito');
+});
+
+test('badge_exclude (oc:9000): i valori indicati dal tema non hanno l\'etichetta nella riga', async () => {
+  const exclude = { badge_exclude: ['validated'] };
+  const result = await load({ source: exclude }).impl.search(query());
+  assert.equal(result.items.find((item) => item.id === 473).badge, null);
+  const plain = await load().impl.search(query());
+  assert.deepEqual(plain.items.find((item) => item.id === 473).badge, { key: 'validated', label: 'Validato' });
 });

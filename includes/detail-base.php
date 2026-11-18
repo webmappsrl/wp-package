@@ -2,9 +2,10 @@
 /**
  * Pagine di dettaglio (oc:8969): la base degli indirizzi.
  *
- * Per tracce e POI, separatamente, la base viene dal tipo (il nome del termine `route-type` o `poi-type` nella lingua
- * della pagina, con ripiego `track`/`poi`, come faceva wp-geohub con `/track/`) oppure da una pagina di WordPress
- * scelta nelle impostazioni (es. i POI sotto `/punti-di-interesse/`). Un tema può imporre le opzioni con
+ * Per tracce e POI, separatamente, la base viene dal tipo (il nome del termine nella lingua della pagina: per le tracce
+ * della famiglia indicata dal tema con `wmwp_track_kind_taxonomy`, per i POI di `poi-type`; con ripiego `track`/`poi`,
+ * come faceva wp-geohub con `/track/`) oppure da una pagina di WordPress scelta nelle impostazioni (es. i POI sotto
+ * `/punti-di-interesse/`). Senza il filtro dei tipi delle tracce (oc:9000) la loro base è sempre `track`. Un tema può imporre le opzioni con
  * `pre_option_<nome>`, senza salvare id di pagine nel database.
  */
 
@@ -31,6 +32,16 @@ function wmwp_detail_base_page( string $type ): int {
 	}
 	$page = (int) get_option( wmwp_detail_page_option( $type ), 0 );
 	return ( $page > 0 && 'publish' === get_post_status( $page ) ) ? $page : 0;
+}
+
+/**
+ * Famiglia di tassonomia che dà il tipo delle tracce (oc:9000): la base degli indirizzi (`/sentiero/…`), il `kind`
+ * dell'indice dei dettagli e il tipo sulle card della ricerca. La indica il tema con il filtro
+ * `wmwp_track_kind_taxonomy` (per Forestas `route-type`, una famiglia che nasce nello shard e non in wm-package);
+ * senza, le tracce non hanno tipo e la base è `track`.
+ */
+function wmwp_track_kind_taxonomy(): string {
+	return (string) apply_filters( 'wmwp_track_kind_taxonomy', '' );
 }
 
 /**

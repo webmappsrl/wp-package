@@ -3,6 +3,45 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.5.0 — 2026-11-18
+
+### Aggiunto
+- Letture del dettaglio dei dati che nascono in wm-package, pronte per il tema (`includes/detail-data.php`):
+  `wmwp_text()` (testo nella lingua con ripiego e la lingua da cui viene), `wmwp_detail_blocks()` (Blocchi Dettaglio),
+  `wmwp_detail_gallery()`, `wmwp_detail_feature_image()`, `wmwp_detail_related_pois()` (con la posizione per la mappa),
+  `wmwp_detail_stats()`, `wmwp_detail_places()` (terzo parametro `$source`: `taxonomies` o `taxonomy_where`),
+  `wmwp_detail_poi_types()` (oc:9000).
+- Registro degli stati delle famiglie (`includes/status.php`): `wmwp_status_families()` con la percorribilità di
+  wm-package, filtri `wmwp_status_families` e `wmwp_walkability_taxonomy`, `wmwp_status_level()` (livello e totale
+  per gli indicatori a tacche: tante tacche quanti sono gli stati della famiglia, ogni stato fino alla sua posizione,
+  lo stato di assenza nessuna) e `wmwp_status_name()` (oc:9000).
+- Percorribilità e avviso del dettaglio della traccia (`includes/detail-status.php`): `wmwp_walkability()` (la data
+  solo se lo stato l'ha messo una persona, `walkability.user` non null) e `wmwp_track_notice()` (acceso con
+  `FILTER_VALIDATE_BOOLEAN`, come `EcTrack::isNotAccessibleOn()` dello shard); il template di base li mostra (oc:9000).
+- Ricerca unica: sorgente «Punti di interesse» da `pois.geojson` (copia `wmwp_poi_search_copy` scritta dallo stesso
+  download dell'indice dei dettagli, solo quando l'indice accetta il nuovo elenco; un'app senza POI ha una copia vuota),
+  rotta `GET wmwp/v1/pois` con testo nella lingua della pagina (ripiego sull'italiano), pagine e faccetta dei tipi (un
+  tipo scelto resta con conteggio 0 e il suo nome); senza copia, o con una copia nel formato di prima (testo cercabile
+  in una stringa sola), risponde 503 e programma la ricostruzione dell'indice.
+  `assets/js/source-pois.js`; nomi della faccetta e `type_label` della card presi dalla source (oc:9000).
+- Card della ricerca: `titleLang` e `metaLang`, la lingua del testo quando ripiega su un'altra; `lang` anche sui valori
+  delle faccette; la Card li marca con l'attributo `lang` (WCAG 3.1.2, `L.langFor()`) (oc:9000).
+- Faccette: proprietà `missing`, il valore per i risultati senza il campo, valido per il filtro e per i conteggi
+  (oc:9000).
+- Source dei percorsi: `badge_exclude`, i valori del campo dell'etichetta della riga che non la mostrano (oc:9000).
+
+### Cambiato
+- **Il plugin non legge più `route-type`**, famiglia creata da uno shard e non da wm-package: la famiglia che dà la
+  base degli indirizzi e il tipo delle tracce la indica il tema con il filtro `wmwp_track_kind_taxonomy` (e
+  `kind_field` nella source dei percorsi). Senza il filtro le tracce non hanno tipo e la base è `track`: un tema che
+  usava `route-type` deve aggiungere il filtro per tenere gli stessi indirizzi (oc:9000).
+- Percorsi senza testo cercato: ordine alfabetico sul nome italiano senza spazi ai lati, con il confronto dello shard;
+  prima restava l'ordine ricevuto, e i nomi con una tabulazione o uno spazio iniziale andavano in testa (oc:9000).
+- La disattivazione toglie anche la copia dei POI; `uninstall.php` la cancella (oc:9000).
+- `wmwp_detail_text()` è un involucro di `wmwp_text()`: un solo ripiego di lingua per indirizzi, titoli e testi
+  (oc:9000).
+- Testo dell'impostazione della base degli indirizzi: per le tracce il tipo è quello scelto dal tema (oc:9000).
+
 ## 0.4.0 — 2026-11-16
 
 ### Aggiunto

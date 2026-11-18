@@ -242,7 +242,8 @@ test('rankByText mette prima i percorsi con il testo nel nome, poi con tutte le 
     named(5, 'Perdà Liana, giro corto'),
   ];
   assert.deepEqual(L.rankByText(list, 'perda liana', 'it').map((h) => h.id), [3, 5, 2, 1, 4]);
-  assert.deepEqual(L.rankByText(list, '', 'it').map((h) => h.id), [1, 2, 3, 4, 5]);
+  // Senza testo: alfabetico sul nome italiano, come lo shard (oc:9000; prima restituiva l'ordine ricevuto)
+  assert.deepEqual(L.rankByText(list, '', 'it').map((h) => h.id), [4, 3, 2, 5, 1]);
 });
 
 test('measuredSum somma un campo solo se tutti i percorsi lo hanno, altrimenti null', () => {
@@ -251,4 +252,63 @@ test('measuredSum somma un campo solo se tutti i percorsi lo hanno, altrimenti n
   assert.equal(L.measuredSum([{ distance: 1.5 }, { distance: 0 }], 'distance'), null);
   assert.equal(L.measuredSum([{ distance: 1.5 }, {}], 'distance'), null);
   assert.equal(L.measuredSum([], 'distance'), null);
+});
+
+// oc:9000: valore per i risultati senza il campo (`missing`), per esempio le tracce senza percorribilità che contano
+// come «Sconosciuta». Nella fixture nessun percorso ha `terms.walkability-status`, e il 529 non ha proprio `terms`.
+const WALKABILITY = {
+  key: 'percorribilita',
+  label: 'Percorribilità',
+  type: 'terms',
+  field: 'terms.walkability-status',
+  missing: 'walkability-status-unknown',
+  labels: { 'walkability-status-unknown': 'Sconosciuta' }
+};
+
+test('missing: un risultato senza il campo vale come il valore dichiarato', () => {
+  const senzaTerms = hits.find((hit) => hit.id === 529);
+  assert.deepEqual(L.facetValues(senzaTerms, WALKABILITY, 'it'), [{ id: 'walkability-status-unknown', label: 'Sconosciuta' }]);
+  const conTerms = Object.assign({}, senzaTerms, { terms: { 'walkability-status': [{ identifier: 'walkability-status-walkable', name: { it: 'Percorribile' } }] } });
+  assert.deepEqual(L.facetValues(conTerms, WALKABILITY, 'it').map((value) => value.id), ['walkability-status-walkable']);
+});
+
+test('missing: vale per il filtro e per i conteggi; senza missing il comportamento resta quello di prima', () => {
+  const selected = { percorribilita: ['walkability-status-unknown'] };
+  assert.equal(L.filterHits(hits, [WALKABILITY], selected, 'it').length, hits.length);
+  const view = L.computeFacets(hits, [WALKABILITY], {}, 'it')[0];
+  assert.deepEqual(view.values.map((value) => [value.id, value.count]), [['walkability-status-unknown', hits.length]]);
+  const senzaMissing = Object.assign({}, WALKABILITY, { missing: undefined });
+  assert.deepEqual(L.computeFacets(hits, [senzaMissing], {}, 'it')[0].values, []);
+});
+
+test('missing con i gruppi: il valore dichiarato passa dal suo gruppo', () => {
+  const grouped = Object.assign({}, WALKABILITY, {
+    groups: [{ id: 'walkability-status-unknown', label: 'Sconosciuta', values: ['walkability-status-unknown'] }]
+  });
+  assert.deepEqual(L.facetValues(hits.find((hit) => hit.id === 529), grouped, 'it'), [{ id: 'walkability-status-unknown', label: 'Sconosciuta' }]);
+});
+
+// oc:9000 (review finale, I4): lingua da marcare con `lang` su un testo che ripiega su un'altra lingua (WCAG 3.1.2)
+test('langFor: la lingua del testo solo se diversa da quella della pagina, confrontando le due lettere', () => {
+  assert.equal(L.langFor('it', 'en-us'), 'it');
+  assert.equal(L.langFor('en', 'en-us'), '');
+  assert.equal(L.langFor('it', 'it'), '');
+  assert.equal(L.langFor(null, 'en'), '');
+  assert.equal(L.langFor('', 'en'), '');
+});
+
+// oc:9000: senza testo l'ordine è quello dello shard (alfabetico sul nome italiano), ma alcuni nomi dello shard
+// cominciano con una tabulazione o uno spazio e finivano in testa all'elenco: si ordina sul nome senza spazi ai lati
+test('rankByText senza testo: alfabetico sul nome italiano senza spazi iniziali, come lo shard con i nomi puliti', () => {
+  const dirty = [
+    { id: 1, name: { it: '\tCMSB - Tappa 04' } },
+    { id: 2, name: " 'Untanas de Su Tassu" },
+    { id: 3, name: { it: 'Abriddedu - Peales', en: 'Abriddedu' } },
+    { id: 4, name: { it: 'Zuddas' } },
+    { id: 5, name: { it: 'Acu e Brusaerru' } }
+  ];
+  assert.deepEqual(L.rankByText(dirty, '', 'en').map((hit) => hit.id), [2, 3, 5, 1, 4]);
+  // A parità di nome resta l'ordine dell'API (9 prima di 8)
+  const tie = [{ id: 9, name: { it: 'Bau' } }, { id: 7, name: { it: 'Abba' } }, { id: 8, name: { it: 'Bau' } }];
+  assert.deepEqual(L.rankByText(tie, '', 'it').map((hit) => hit.id), [7, 9, 8]);
 });
