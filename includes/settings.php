@@ -307,7 +307,7 @@ function wmwp_render_settings_page(): void {
 				</tr>
 			</table>
 			<h2><?php echo esc_html__( 'Detail pages', 'wp-package' ); ?></h2>
-			<p><?php echo esc_html__( 'By default the address of a detail page starts with its type: the route type of a track (e.g. /trail/…, /track/ without one) and the POI type of a point of interest (/poi/ without one). Under a page, every address starts with the path of that page.', 'wp-package' ); ?></p>
+			<p><?php echo esc_html__( 'By default the address of a detail page starts with its type: for a track, the type the theme chooses (e.g. /trail/…; /track/ without one or when the theme chooses none) and for a point of interest its POI type (/poi/ without one). Under a page, every address starts with the path of that page.', 'wp-package' ); ?></p>
 			<table class="form-table" role="presentation">
 				<?php
 				$labels = [

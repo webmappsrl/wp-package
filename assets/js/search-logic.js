@@ -50,10 +50,17 @@
       return [];
     }
     var raw = fieldValue(hit, facet.field);
+    var labels = facet.labels || {};
+    // Un risultato senza il campo vale come `missing`, se il tema lo dichiara (oc:9000): per esempio le tracce senza
+    // percorribilità contano come «Sconosciuta», nel filtro e nei conteggi
+    if (facet.missing && !hasValue(raw, facet.type)) {
+      var missingId = String(facet.missing);
+      var missing = [{ id: missingId, label: String(labels[missingId] || missingId).trim() }];
+      return facet.groups ? groupValues(missing, facet.groups) : missing;
+    }
     if (!Array.isArray(raw)) {
       return [];
     }
-    var labels = facet.labels || {};
     var result = [];
     raw.forEach(function (item) {
       var id;
@@ -83,8 +90,26 @@
     return facet.groups ? groupValues(result, facet.groups) : result;
   }
 
-  // Fasce (`groups`): più valori sotto una voce sola, per esempio gli stati di validazione nelle fasce Base,
-  // Intermedio e Avanzato della tavola 2. Un valore che non sta in nessuna fascia non conta.
+  // Il campo ha almeno un valore utile: per i termini un oggetto con l'identifier, per le liste un valore non vuoto
+  function hasValue(raw, type) {
+    if (!Array.isArray(raw)) {
+      return false;
+    }
+    return raw.some(function (item) {
+      return type === 'terms' ? !!(item && typeof item === 'object' && item.identifier) : item != null && item !== '';
+    });
+  }
+
+  // Lingua da dare a un testo con `lang` (WCAG 3.1.2): quella del testo, se è diversa da quella della pagina, confrontando
+  // le due lettere (i codici di WPML possono avere la regione, en-us); '' se è la stessa o non si sa (oc:9000)
+  function langFor(textLang, pageLang) {
+    var text = String(textLang || '').toLowerCase().slice(0, 2);
+    var page = String(pageLang || '').toLowerCase().slice(0, 2);
+    return text && text !== page ? text : '';
+  }
+
+  // Gruppi (`groups`): più valori sotto una voce sola (il tema può anche dare un gruppo per valore, per avere l'ordine
+  // e i nomi suoi, come i filtri degli stati di Forestas, oc:9000). Un valore che non sta in nessun gruppo non conta.
   function groupValues(values, groups) {
     var out = [];
     groups.forEach(function (group) {
@@ -159,12 +184,24 @@
       .trim();
   }
 
+  // Nome con cui lo shard ordina (name.keyword: il nome italiano), senza spazi e tabulazioni ai lati
+  function sortName(hit) {
+    var name = hit && hit.name;
+    return String((name && typeof name === 'object' ? name.it : name) || '').trim();
+  }
+
   // Pertinenza (punto aperto 4 di oc:8952): prima i risultati che hanno il testo cercato nel nome, poi quelli che
   // ne hanno tutte le parole, poi gli altri; a parità resta l'ordine dell'API (per nome).
   function rankByText(hits, text, lang) {
     var phrase = normalize(text);
     if (!phrase) {
-      return hits.slice();
+      // Senza testo l'ordine è quello dello shard, alfabetico sul nome italiano; alcuni nomi dello shard cominciano
+      // con una tabulazione o uno spazio e finirebbero in testa: si riordina sul nome ripulito, con lo stesso
+      // confronto per codice (con i nomi puliti l'ordine resta quello dell'API; a parità, l'ordine dell'API) (oc:9000)
+      return hits
+        .map(function (hit, index) { return { hit: hit, name: sortName(hit), index: index }; })
+        .sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : a.index - b.index; })
+        .map(function (item) { return item.hit; });
     }
     var words = phrase.split(' ');
     return hits
@@ -358,6 +395,8 @@
     formatMeters: formatMeters,
     formatDuration: formatDuration,
     measuredSum: measuredSum,
-    countLabel: countLabel
+    countLabel: countLabel,
+    langFor: langFor,
+    fieldValue: fieldValue
   };
 });

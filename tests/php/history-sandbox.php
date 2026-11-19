@@ -5,9 +5,11 @@
  * agli elementi veri. Crea `{prefix}wmwp_detail_paths_test`, la svuota, fa puntare lì lo storico (filtro interno
  * `wmwp_detail_paths_table`), forza la versione dello schema e spegne il primo giro; alla fine della richiesta (anche
  * dopo `exit` o un errore fatale, a differenza di `finally`) cancella la tabella, toglie i filtri e rimette com'erano
- * le option vere dello storico e lo stato vero dell'indice (transient, ultimo indice buono, basi).
+ * le option vere dello storico e lo stato vero dell'indice (transient, ultimo indice buono, basi, copia dei POI per la
+ * ricerca).
  *
- * Non è un test: si include come prima riga dei `tests/php/detail-*.php`.
+ * Non è un test: si include come prima riga dei test che costruiscono l'indice dei dettagli (`tests/php/detail-*.php`
+ * tranne `detail-data.php`, `detail-kind.php` e `detail-status.php`, che leggono solo dati, e `search-pois.php`).
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -31,7 +33,8 @@ $wmwp_sandbox_index = [
 	'transient' => get_transient( 'wmwp_detail_index' ),
 	'options'   => [],
 ];
-foreach ( [ 'wmwp_detail_index_last', 'wmwp_detail_index_rebuilt_at', 'wmwp_detail_bases', 'wmwp_detail_index_rejects' ] as $wmwp_sandbox_option ) {
+// Con l'indice si riscrive anche la copia dei POI per la ricerca (oc:9000): va rimessa com'era
+foreach ( [ 'wmwp_detail_index_last', 'wmwp_detail_index_rebuilt_at', 'wmwp_detail_bases', 'wmwp_detail_index_rejects', 'wmwp_poi_search_copy' ] as $wmwp_sandbox_option ) {
 	$wmwp_sandbox_index['options'][ $wmwp_sandbox_option ] = get_option( $wmwp_sandbox_option, null );
 }
 

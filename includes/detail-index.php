@@ -13,26 +13,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Nome nella lingua richiesta, con ripiego sull'italiano e poi sulla prima lingua non vuota. Spazi e tabulazioni
- * ai lati non contano: nell'API ci sono nomi con il tab in coda e traduzioni fatte solo di spazi.
+ * Nome nella lingua richiesta, con ripiego sull'italiano e poi sulla prima lingua non vuota (wmwp_text(), oc:9000).
+ * Spazi e tabulazioni ai lati non contano: nell'API ci sono nomi con il tab in coda e traduzioni fatte solo di spazi.
  *
  * @param array<string, mixed>|string|null $names Nomi per lingua, o un nome solo.
  */
 function wmwp_detail_text( $names, string $lang ): string {
-	if ( is_string( $names ) ) {
-		return trim( $names );
-	}
-	if ( ! is_array( $names ) ) {
-		return '';
-	}
-	// I codici di WPML possono avere la regione (en-us): i nomi dell'API stanno sotto le due lettere
-	foreach ( array_merge( [ $lang, strtolower( substr( $lang, 0, 2 ) ), 'it' ], array_keys( $names ) ) as $key ) {
-		$value = isset( $names[ $key ] ) && is_scalar( $names[ $key ] ) ? trim( (string) $names[ $key ] ) : '';
-		if ( '' !== $value ) {
-			return $value;
-		}
-	}
-	return '';
+	// Il nome fa lo slug e l'indirizzo stabile (oc:8983): una lingua con una lista si salta, come prima di oc:9000,
+	// invece di unirla come fa wmwp_text()
+	return wmwp_text( is_array( $names ) ? array_filter( $names, 'is_scalar' ) : $names, $lang )['text'];
 }
 
 /** Percorso `<base>/<slug>` della richiesta in forma canonica: minuscolo, senza barre ai lati. */
@@ -97,8 +86,9 @@ function wmwp_detail_languages(): array {
  * percorso resta dell'elemento a cui è stato dato finché quell'elemento esiste.
  *
  * @param list<array{type: string, id: int, names: mixed, kind: ?array, source?: ?string}> $items Elementi: tipo
- *        (`track` o `poi`), id, nomi per lingua, nomi per lingua del loro tipo (`route-type` o `poi-type`, null se
- *        non ce l'hanno) e chiave stabile (`wmwp_detail_source()`, se c'è).
+ *        (`track` o `poi`), id, nomi per lingua, nomi per lingua del loro tipo (per le tracce la famiglia di
+ *        `wmwp_track_kind_taxonomy()`, per i POI `poi-type`; null se non ce l'hanno) e chiave stabile
+ *        (`wmwp_detail_source()`, se c'è).
  * @param callable                                                     $base  function( string $type, ?array $kind, string $lang ): string
  * @param list<string>|null                                            $langs Lingue; null = wmwp_detail_languages().
  * @param array<string, array<string, array{type: string, key: string, base: string, root: string, suffix: int, current: bool}>> $history
@@ -314,6 +304,7 @@ function wmwp_detail_fetch_items(): ?array {
 		return null;
 	}
 
+	wmwp_poi_search_pending( null, true );
 	$tracks = wmwp_detail_get_json( add_query_arg( 'app', wmwp_app_param(), $elastic ), WMWP_DETAIL_LIST_TIMEOUT );
 	$pois   = wmwp_detail_get_json( $origin . '/api/v2/app/' . $app . '/pois.geojson', WMWP_DETAIL_LIST_TIMEOUT );
 	// Una risposta di Elasticsearch scaduta o con shard falliti è parziale anche se lo stato è 200
@@ -321,15 +312,18 @@ function wmwp_detail_fetch_items(): ?array {
 		return null;
 	}
 
-	$items = [];
-	$hits  = $tracks['hits'] ?? [];
+	// Copia per la ricerca dei POI (oc:9000): dallo stesso download, scritta solo se l'indice viene accettato
+	wmwp_poi_search_pending( (array) ( $pois['features'] ?? [] ) );
+	$items  = [];
+	$family = wmwp_track_kind_taxonomy();
+	$hits   = $tracks['hits'] ?? [];
 	if ( isset( $hits['hits'] ) && is_array( $hits['hits'] ) ) {
 		$hits = $hits['hits'];
 	}
 	foreach ( (array) $hits as $hit ) {
 		$hit  = isset( $hit['_source'] ) && is_array( $hit['_source'] ) ? $hit['_source'] : $hit;
 		$id   = (int) ( $hit['id'] ?? 0 );
-		$kind = $hit['terms']['route-type'][0]['name'] ?? null;
+		$kind = '' !== $family ? ( $hit['terms'][ $family ][0]['name'] ?? null ) : null;
 		if ( $id > 0 ) {
 			$source  = wmwp_detail_source( 'track', (array) $hit );
 			$items[] = [
@@ -507,6 +501,7 @@ function wmwp_detail_index_rebuild( ?array $guard, string $config ): ?array {
 	$index['config'] = $config;
 	set_transient( WMWP_DETAIL_INDEX_KEY, $index, WMWP_DETAIL_INDEX_TTL );
 	update_option( WMWP_DETAIL_INDEX_LAST, $index, false );
+	wmwp_poi_search_commit();
 	// Solo con un indice accettato lo storico cambia: righe con l'id dimenticate, primo giro, percorsi nuovi (si
 	// scrivono solo le righe che cambiano). L'option del primo giro si toglie solo se la scrittura è riuscita
 	foreach ( $renumbered as $type ) {

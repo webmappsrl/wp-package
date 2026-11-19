@@ -19,6 +19,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 const WMWP_DETAIL_STALE_MARK = 'stale';
 
 /**
+ * Versione del file della traccia su AWS da leggere (oc:8997 di wm-package: `tracks/<versione>/<id>.json`, accanto al
+ * file senza versione), scelta dal tema con il filtro `wmwp_track_json_version`: '' (predefinito) per il file senza
+ * versione, `v1`, `v2`… Un valore che non ha la forma `v<numero>` vale come ''. Riguarda solo il dettaglio della
+ * traccia: POI, `pois.geojson` ed Elasticsearch non hanno versioni.
+ */
+function wmwp_track_json_version(): string {
+	$version = (string) apply_filters( 'wmwp_track_json_version', '' );
+	return 1 === preg_match( '/^v[1-9][0-9]*$/', $version ) ? $version : '';
+}
+
+/**
  * JSON del dettaglio (una Feature), o WP_Error: `wmwp_detail_not_found` se lo shard dice che l'elemento non c'è (404:
  * cancellato, o id inesistente), `wmwp_detail_unavailable` se la fonte non risponde (rete, timeout, codice diverso da
  * 200, 304 e 404, risposta che non è una feature) e non c'è una copia da servire. Sul file della traccia decide l'API
@@ -62,12 +73,25 @@ function wmwp_detail_fetch( string $type, int $id, bool $fresh = false ) {
 		return $cached['feature'];
 	}
 
-	// La traccia dal file che lo shard pubblica su AWS, lo stesso che restituisce l'API; il POI un file non lo ha
+	// La traccia dal file che lo shard pubblica su AWS, lo stesso che restituisce l'API; il POI un file non lo ha. Con
+	// una versione (wmwp_track_json_version()) prima il suo file, e se non c'è (shard che non la scrive ancora) quello
+	// senza versione. La richiesta condizionale vale solo per il file da cui viene la copia
 	$entry  = null;
 	$reason = '';
 	if ( 'track' === $type && '' !== $urls['aws_api'] ) {
-		$entry  = wmwp_detail_fetch_file( $urls['aws_api'] . '/tracks/' . $id . '.json', $cached, $reason );
-		$reason = '' !== $reason ? 'file AWS: ' . $reason . '; ' : '';
+		$version = wmwp_track_json_version();
+		$files   = array_unique( [ $urls['aws_api'] . '/tracks/' . ( '' !== $version ? $version . '/' : '' ) . $id . '.json', $urls['aws_api'] . '/tracks/' . $id . '.json' ] );
+		foreach ( $files as $file ) {
+			$why   = '';
+			$same  = null !== $cached && ( $cached['url'] ?? $urls['aws_api'] . '/tracks/' . $id . '.json' ) === $file;
+			$entry = wmwp_detail_fetch_file( $file, $same ? $cached : null, $why );
+			if ( null !== $entry ) {
+				$entry['url'] = $file;
+				break;
+			}
+			// Con due file il motivo dice quale: «file AWS v1/5.json: HTTP 404; file AWS tracks/5.json: …»
+			$reason .= 'file AWS' . ( count( $files ) > 1 ? ' ' . basename( dirname( $file ) ) . '/' . basename( $file ) : '' ) . ': ' . $why . '; ';
+		}
 	}
 	if ( null === $entry ) {
 		$api = wmwp_http_json( wmwp_server_url( $origin . '/api/ec/' . $type . '/' . $id ), WMWP_DETAIL_TIMEOUT );

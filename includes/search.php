@@ -97,6 +97,7 @@ function wmwp_safe_facet_keys( array $source ): array {
  * @return array<string, array<string, mixed>>
  */
 function wmwp_search_sources(): array {
+	$kind     = wmwp_track_kind_taxonomy();
 	$defaults = [
 		'tracks' => [
 			'label'           => __( 'Trails', 'wp-package' ),
@@ -114,7 +115,11 @@ function wmwp_search_sources(): array {
 			'facets'          => [],
 			// Indirizzo per id del dettaglio (oc:8969), nella lingua della pagina; il tema lo può cambiare
 			'link_template'   => wmwp_detail_link_template( 'track' ),
+			// Tipo del percorso sulla card: la famiglia che indica il tema (wmwp_track_kind_taxonomy), '' = nessun tipo
+			'kind_field'      => '' !== $kind ? 'terms.' . $kind : '',
 			'badge_field'     => '',
+			// Valori del campo dell'etichetta che non la mostrano (oc:9000)
+			'badge_exclude'   => [],
 			'meta_facet'      => '',
 			// Selezione e scarico di più percorsi: URL di `api/ec/track/multiple` ('' = niente selezione), nome di
 			// base del file, testo del numero di percorsi scelti e nome della barra per gli screen reader
@@ -127,6 +132,26 @@ function wmwp_search_sources(): array {
 				'other' => __( '%s trails selected', 'wp-package' ),
 			],
 			'selection_label' => __( 'Selected trails', 'wp-package' ),
+		],
+		// Punti di interesse (oc:9000): la rotta REST del plugin (includes/search-pois.php) cerca, filtra e conta i tipi
+		'pois'   => [
+			'label'    => __( 'Points of interest', 'wp-package' ),
+			'nouns'    => [
+				/* translators: %s: number of points of interest, singular */
+				'one'   => __( '%s point of interest', 'wp-package' ),
+				/* translators: %s: number of points of interest, plural */
+				'other' => __( '%s points of interest', 'wp-package' ),
+			],
+			'script'   => 'wmwp-source-pois',
+			'layout'   => 'cards',
+			'endpoint' => rest_url( 'wmwp/v1/pois' ),
+			'facets'   => [
+				[
+					'key'   => WMWP_POI_SEARCH_FACET,
+					'label' => __( 'Type', 'wp-package' ),
+					'type'  => 'terms',
+				],
+			],
 		],
 	];
 	$sources    = (array) apply_filters( 'wp_package_search_sources', $defaults );
@@ -156,6 +181,10 @@ function wmwp_search_sources(): array {
 			$source,
 			[ 'id' => $id ]
 		);
+		// Una lista con chiavi non sequenziali diventerebbe un oggetto JSON, e il JS ci cerca con indexOf (oc:9000)
+		if ( isset( $normalized[ $id ]['badge_exclude'] ) ) {
+			$normalized[ $id ]['badge_exclude'] = array_values( array_map( 'strval', (array) $normalized[ $id ]['badge_exclude'] ) );
+		}
 		$normalized[ $id ] = wmwp_safe_facet_keys( $normalized[ $id ] );
 	}
 	return $normalized;
@@ -192,10 +221,14 @@ function wmwp_enqueue_search_assets( array $sources, array $params ): void {
 	wp_register_script( 'wmwp-track-export', WMWP_URL . 'assets/js/track-export.js', [], wmwp_asset_version( 'assets/js/track-export.js' ), $args );
 	wp_register_script( 'wmwp-source-tracks', WMWP_URL . 'assets/js/source-tracks.js', [ 'wmwp-search', 'wmwp-track-export', 'wmwp-track-api', 'wmwp-track-map' ], wmwp_asset_version( 'assets/js/source-tracks.js' ), $args );
 
+	wp_register_script( 'wmwp-source-pois', WMWP_URL . 'assets/js/source-pois.js', [ 'wmwp-search' ], wmwp_asset_version( 'assets/js/source-pois.js' ), $args );
+
 	$config = [
 		'params'  => $params,
 		'sources' => array_values( $sources ),
 		'lang'    => wmwp_current_lang(),
+		// Filtri che si aprono e chiudono dal titolo (oc:9000): spenti di base, il tema li accende con il filtro
+		'collapsible_facets' => (bool) apply_filters( 'wmwp_search_collapsible_facets', false ),
 		// La mappa pesa 800 KB: la pagina la carica solo al primo passaggio alla vista «Mappa». Carta di base e colori
 		// dei layer sono quelli dell'app (wmwp_app_map_config)
 		'map'     => wmwp_map_assets() + [

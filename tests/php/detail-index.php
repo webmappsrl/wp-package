@@ -36,6 +36,8 @@ $check( 'Solo' === wmwp_detail_text( 'Solo', 'en' ), 'una stringa vale per tutte
 $check( '' === wmwp_detail_text( null, 'it' ), 'niente nome → stringa vuota' );
 // Codici di WPML con la regione (en-us): i nomi dell'API sono sotto le due lettere
 $check( 'Climb' === wmwp_detail_text( [ 'it' => 'Salita', 'en' => 'Climb' ], 'en-us' ), 'codice WPML en-us → nome en' );
+// Il nome fa lo slug e l'indirizzo stabile (oc:8983): una lingua con una lista si salta, come prima di oc:9000
+$check( 'Climb' === wmwp_detail_text( [ 'it' => [ 'Salita', 'lunga' ], 'en' => 'Climb' ], 'it' ), 'lista in una lingua: si salta' );
 
 // 2. Lo slug non è mai vuoto
 $check( '77' === wmwp_detail_slug( '— !!', 77 ), 'nome senza lettere → id' );

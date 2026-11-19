@@ -3,7 +3,9 @@
  * Test (oc:8969): il JSON della traccia si legge dal file pubblicato su AWS (`<awsApi>/tracks/<id>.json`) con la
  * richiesta condizionale: entro la cache breve nessuna chiamata, dopo un `If-None-Match`/`If-Modified-Since` e con il
  * 304 si riusa il JSON già letto. Senza file su AWS, o senza `aws_api`, si legge l'API dello shard; i POI un file non
- * lo hanno e si leggono sempre dallo shard. AWS e shard sono finti (`pre_http_request`).
+ * lo hanno e si leggono sempre dallo shard. Con la versione del file scelta dal tema (`wmwp_track_json_version`, oc:9000
+ * per oc:8997) si legge `<awsApi>/tracks/<versione>/<id>.json`, e senza quel file il file senza versione; la richiesta
+ * condizionale vale solo per lo stesso indirizzo. AWS e shard sono finti (`pre_http_request`).
  * Si lancia con: wp eval-file tests/php/detail-aws.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1.
  */
@@ -26,12 +28,20 @@ $with_aws = function ( $urls ) use ( $aws_base ) {
 	return $urls;
 };
 add_filter( 'wmwp_api_urls', $with_aws, 20 );
+// Versione del file: di base nessuna (il tema attivo può sceglierne una: qui la decide il test)
+$versione     = '';
+$con_versione = function () use ( &$versione ) {
+	return $versione;
+};
+add_filter( 'wmwp_track_json_version', $con_versione, 99 );
 
 $aws = [
 	'status'   => 200,
 	'etag'     => '"e1"',
 	'modified' => 'Thu, 12 Nov 2026 05:43:03 GMT',
 	'name'     => 'Salita',
+	// Stato del file della versione (tracks/v1/5.json), e il suo nome
+	'v1'       => 200,
 ];
 $log = [];
 add_filter(
@@ -39,11 +49,13 @@ add_filter(
 	function ( $pre, $args, $url ) use ( &$aws, &$log, $aws_base ) {
 		$headers = array_change_key_case( (array) ( $args['headers'] ?? [] ), CASE_LOWER );
 		if ( 0 === strpos( $url, $aws_base . '/' ) ) {
-			$log[] = [ 'aws', $url, $headers ];
-			$same  = ( '' !== $aws['etag'] && ( $headers['if-none-match'] ?? '' ) === $aws['etag'] )
+			$log[]  = [ 'aws', $url, $headers ];
+			$v1     = false !== strpos( $url, '/tracks/v1/' );
+			$status = $v1 ? $aws['v1'] : $aws['status'];
+			$same   = ( '' !== $aws['etag'] && ( $headers['if-none-match'] ?? '' ) === $aws['etag'] )
 				|| ( '' === $aws['etag'] && ( $headers['if-modified-since'] ?? '' ) === $aws['modified'] );
-			$code  = 200 === $aws['status'] && $same ? 304 : $aws['status'];
-			$body  = 200 === $code ? wp_json_encode( [ 'type' => 'Feature', 'properties' => [ 'id' => 5, 'name' => [ 'it' => $aws['name'] ] ], 'geometry' => null ] ) : '';
+			$code   = 200 === $status && $same ? 304 : $status;
+			$body   = 200 === $code ? wp_json_encode( [ 'type' => 'Feature', 'properties' => [ 'id' => 5, 'name' => [ 'it' => $aws['name'] . ( $v1 ? ' v1' : '' ) ] ], 'geometry' => null ] ) : '';
 			return [
 				'headers'  => array_filter( [ 'etag' => $aws['etag'], 'last-modified' => $aws['modified'] ] ),
 				'body'     => $body,
@@ -125,6 +137,36 @@ $log = [];
 wmwp_detail_fetch( 'poi', 5 );
 $check( 1 === count( $log ) && 'api' === $log[0][0], 'POI → solo API dello shard' );
 
+// 7b. Versione del file scelta dal tema (oc:8997): tracks/v1/5.json, con la richiesta condizionale sullo stesso file
+$aws['status'] = 200;
+$aws['etag']   = '"e3"';
+$versione      = 'v1';
+$check( 'v1' === wmwp_track_json_version(), 'versione dal filtro: ' . wmwp_track_json_version() );
+delete_transient( 'wmwp_detail_json_track_5' );
+$log = [];
+$check( 'Salita nuova v1' === $name( wmwp_detail_fetch( 'track', 5 ) ), 'versione v1: file della versione' );
+$check( 1 === count( $log ) && $aws_base . '/tracks/v1/5.json' === $log[0][1], 'una chiamata, a <awsApi>/tracks/v1/5.json: ' . wp_json_encode( array_column( $log, 1 ) ) );
+$log = [];
+$check( 'Salita nuova v1' === $name( wmwp_detail_fetch( 'track', 5, true ) ) && '"e3"' === ( $log[0][2]['if-none-match'] ?? '' ), 'versione v1: 304 sullo stesso file' );
+// File della versione non ancora scritto (shard senza la versione): il file senza versione, poi l'API
+$aws['v1'] = 404;
+delete_transient( 'wmwp_detail_json_track_5' );
+$log = [];
+$check( 'Salita nuova' === $name( wmwp_detail_fetch( 'track', 5 ) ), 'senza il file v1 → file senza versione' );
+$check( [ $aws_base . '/tracks/v1/5.json', $aws_base . '/tracks/5.json' ] === array_column( $log, 1 ), 'prima la v1, poi il file senza versione: ' . wp_json_encode( array_column( $log, 1 ) ) );
+// La copia viene dal file senza versione: con la v1 tornata, la richiesta alla v1 non porta le sue intestazioni
+$aws['v1'] = 200;
+$log       = [];
+$check( 'Salita nuova v1' === $name( wmwp_detail_fetch( 'track', 5, true ) ) && ! isset( $log[0][2]['if-none-match'] ), 'copia di un altro file: richiesta non condizionale' );
+// Una versione che non ha la forma v<numero> vale come nessuna
+$versione = '../x';
+$check( '' === wmwp_track_json_version(), 'versione non valida → nessuna' );
+delete_transient( 'wmwp_detail_json_track_5' );
+$log = [];
+wmwp_detail_fetch( 'track', 5 );
+$check( [ $aws_base . '/tracks/5.json' ] === array_column( $log, 1 ), 'versione non valida → file senza versione' );
+$versione = '';
+
 // 8. Senza aws_api le tracce si leggono dallo shard
 remove_filter( 'wmwp_api_urls', $with_aws, 20 );
 add_filter(
@@ -141,6 +183,7 @@ $log = [];
 wmwp_detail_fetch( 'track', 5 );
 $check( 1 === count( $log ) && 'api' === $log[0][0], 'senza aws_api → API dello shard' );
 
+remove_filter( 'wmwp_track_json_version', $con_versione, 99 );
 foreach ( [ 'track', 'poi' ] as $i => $type ) {
 	delete_transient( 'wmwp_detail_json_' . $type . '_5' );
 	if ( false !== $saved[ $i ] ) {
