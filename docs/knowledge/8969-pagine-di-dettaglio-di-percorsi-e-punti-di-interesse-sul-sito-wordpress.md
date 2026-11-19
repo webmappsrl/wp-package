@@ -53,6 +53,11 @@ pubblica», «Mappa» e «Pagine di dettaglio». Qui c'è solo il perché delle 
   Elasticsearch dal vivo e può avere elementi più nuovi dell'indice.
 - **`hreflang` stampati dal plugin**: WPML li stampa solo per gli oggetti della query, cioè i post; il filtro
   `wpml_hreflangs` previsto nel piano non basta per una pagina senza post.
+- **Versione del file della traccia scelta dal tema, con ripiego** (oc:9000): lo shard scrive `tracks/<id>.json` e, se
+  la dichiara, una versione accanto (`tracks/v1/<id>.json`, oc:8997 di wm-package). Il plugin è usato da shard che la
+  versione non la scrivono ancora, quindi di base legge il file senza versione e il tema sceglie la sua con
+  `wmwp_track_json_version`; senza quel file si legge il file senza versione, poi l'API. La copia in cache ricorda da
+  quale file viene: l'ETag di un file non va mandato a un altro.
 - **File su AWS e MinIO con la stessa logica**: in produzione il frontend legge i file su AWS; dev e UAT servono gli
   stessi file da MinIO, quindi il plugin non distingue gli ambienti e legge l'indirizzo `awsApi` di `environment.ts`.
 
