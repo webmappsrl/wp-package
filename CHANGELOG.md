@@ -28,6 +28,9 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le ve
   `include`, `include_pattern`, `exclude`, `exclude_pattern` come per i percorsi), luoghi nella copia (`wheres`),
   parametro `filter[<chiave>][]` della rotta; ogni faccetta, tipi compresi, conta senza il proprio filtro e con gli
   altri (oc:9000).
+- Dettaglio della traccia da un file con la versione (oc:8997 di wm-package): filtro `wmwp_track_json_version`
+  (`wmwp_track_json_version()`), `tracks/<versione>/<id>.json` con ripiego sul file senza versione e poi sull'API; la
+  richiesta condizionale vale solo per il file da cui viene la copia (oc:9000).
 - Filtri della ricerca che si aprono e chiudono dal titolo, accesi dal tema con il filtro
   `wmwp_search_collapsible_facets` (pulsante con `aria-expanded` nel `legend`, aperto all'inizio solo il filtro con una
   voce scelta); «Show more» in italiano diventa «Mostra di più» (oc:9000).

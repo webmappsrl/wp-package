@@ -135,6 +135,11 @@ passano da `wmwp_server_url()`.
 `.is-open`. All'apertura della pagina è aperto solo il filtro con una voce scelta; poi ognuno resta come l'ha lasciato
 chi cerca, finché la pagina non si ricarica. Lo stile (freccia compresa) è del tema.
 
+**`wmwp_track_json_version`** — versione del file della traccia su AWS da leggere per il dettaglio (oc:8997 di
+wm-package): `''` (predefinito) per `tracks/<id>.json`, `v1`, `v2`… per `tracks/<versione>/<id>.json`; un valore che non
+ha la forma `v<numero>` vale come `''`. Se il file della versione non c'è (shard che non la scrive ancora) si legge
+quello senza versione, poi l'API. Riguarda solo le tracce: POI, `pois.geojson` ed Elasticsearch non hanno versioni.
+
 **`wmwp_track_kind_taxonomy`** — identifier della famiglia di tassonomia che dà il tipo delle tracce (predefinito `''`):
 la base degli indirizzi, il `kind` dell'indice dei dettagli e il tipo sulle card (`kind_field`). Il plugin non legge
 più `route-type`, famiglia che nasce in uno shard e non in wm-package: senza il filtro le tracce non hanno tipo e la

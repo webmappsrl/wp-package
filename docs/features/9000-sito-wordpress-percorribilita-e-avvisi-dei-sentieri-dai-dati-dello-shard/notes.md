@@ -91,6 +91,15 @@ waterfall 0/18, `q=it` 630), indirizzi dell'indice identici a «prima».
 - Lo stato aperto/chiuso resta in memoria durante la ricerca (come «Mostra di più»), non nell'indirizzo.
 - «Mostra altro» → «Mostra di più» nel `.po`, nel `.mo` (msgfmt) e nel JSON dello script: cambiata solo quella voce.
 
+## File v1 della traccia (19/11)
+
+- Chiesto da Giuseppe allo scrum del 19/11 («sul dettaglio della WordPress devi mettere dopo track V1»), dopo oc:8997.
+  La versione la sceglie il tema (`wmwp_track_json_version`), perché il plugin è condiviso e gli altri shard possono
+  non scrivere la v1; senza il file della versione si legge quello senza versione, così un server senza
+  `WMFE_TRACK_VERSIONS` non rompe il dettaglio.
+- La copia in cache ricorda da quale file viene (`url`): la richiesta condizionale non manda l'ETag di un file a un
+  altro. Le copie scritte prima non hanno `url` e valgono come del file senza versione.
+
 ## Follow-up
 
 - Quando lo shard espone l'elenco degli stati di una famiglia, `wmwp_status_families()` lo legge da lì.
