@@ -93,8 +93,15 @@
   // Filtro i cui valori vanno all'inizio della riga (es. i comuni), indicato dal tema con meta_facet
   var metaFacet = (source.facets || []).find(function (facet) { return facet.key === source.meta_facet; }) || null;
 
+  function badgeFor(hit, lang) {
+    var badge = L.firstTerm(hit, source.badge_field, lang, source.term_labels);
+    return badge && (source.badge_exclude || []).indexOf(badge.key) !== -1 ? null : badge;
+  }
+
   function toCard(hit, lang) {
-    var routeType = hit.terms && Array.isArray(hit.terms['route-type']) ? hit.terms['route-type'][0] : null;
+    // Tipo del percorso dalla famiglia indicata dal tema (kind_field, es. terms.route-type): il plugin non la conosce
+    var kindList = source.kind_field ? L.fieldValue(hit, source.kind_field) : null;
+    var routeType = Array.isArray(kindList) ? kindList[0] : null;
     var ascent = L.formatMeters(hit.ascent, lang);
     return {
       id: hit.id,
@@ -111,8 +118,9 @@
         ascent ? '+' + ascent : '',
         L.formatDuration(hit.duration_forward, lang)
       ],
-      // Stato del percorso (es. terms.validation-status), se il tema indica il campo con badge_field
-      badge: L.firstTerm(hit, source.badge_field, lang, source.term_labels)
+      // Stato del percorso (es. terms.walkability-status), se il tema indica il campo con badge_field; i valori di
+      // badge_exclude non hanno l'etichetta (per esempio lo stato «non lo sappiamo», oc:9000)
+      badge: badgeFor(hit, lang)
     };
   }
 
