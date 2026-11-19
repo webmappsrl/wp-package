@@ -72,6 +72,25 @@ falliva prima:
 Verificato sul locale: 976 POI con le sole lingue `it` e `en`, stessi risultati di prima (nuraghe 66/65, cascata 19,
 waterfall 0/18, `q=it` 630), indirizzi dell'indice identici a «prima».
 
+## Filtri dei luoghi dei POI (19/11)
+
+- Chiesti da Rubens il 19/11 dopo il commit della 0.5.0 (ancora da mergiare): restano nella 0.5.0, con la voce nel
+  `CHANGELOG.md`.
+- Le faccette le decide il tema, come per i percorsi: il plugin sa solo dividere `taxonomyWheres` con le regole di
+  `keepValue()` di `search-logic.js`, rifatte in PHP (`wmwp_poi_search_keep_place()`) perché il calcolo è sul server.
+- Con le faccette dei luoghi i conteggi dei tipi tengono conto dei luoghi scelti: prima contavano solo i risultati del
+  testo.
+- Una copia scritta prima non ha i luoghi: invece del 503 (come per la copia del formato di prima) la rotta risponde
+  senza luoghi e programma la ricostruzione, perché i risultati restano giusti e manca solo un filtro.
+
+## Filtri apribili e «Mostra di più» (19/11)
+
+- Chiesti da Rubens per allineare la ricerca ai filtri dei post del sito: il disegno delle faccette è del plugin, quindi
+  il pulsante nel titolo sta qui, spento di base perché cambia l'aspetto per ogni sito che monta il plugin. Il plugin
+  non ha CSS: freccia e aspetto li dà il tema.
+- Lo stato aperto/chiuso resta in memoria durante la ricerca (come «Mostra di più»), non nell'indirizzo.
+- «Mostra altro» → «Mostra di più» nel `.po`, nel `.mo` (msgfmt) e nel JSON dello script: cambiata solo quella voce.
+
 ## Follow-up
 
 - Quando lo shard espone l'elenco degli stati di una famiglia, `wmwp_status_families()` lo legge da lì.

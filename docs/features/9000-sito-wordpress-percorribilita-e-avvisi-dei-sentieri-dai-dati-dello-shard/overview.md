@@ -99,6 +99,15 @@ piano»). Si fa prima di tutto il resto, e si chiude con il controllo che nulla 
       risultati per pagina: faccetta `poi-type` con i conteggi (un POI con più tipi conta in ognuno), pagine come le
       altre sorgenti. I nomi dei tipi nella lingua della pagina, con ripiego sull'italiano marcato `lang="it"`: sul
       dev 382 POI non hanno il nome del tipo in inglese.
+- [x] Filtri dei luoghi dei POI (Rubens, 19/11): il tema aggiunge alla source faccette `list` su `taxonomyWheres` con
+      le regole delle faccette dei percorsi (`include`, `include_pattern`, `exclude`, `exclude_pattern`), e la rotta
+      le calcola sul server (`filter[<chiave>][]`). Ogni faccetta, tipi compresi, conta senza il proprio filtro e con
+      gli altri. La copia tiene i luoghi (`wheres`); una copia senza luoghi risponde e si riscrive subito. Sul dev 974
+      POI su 976 hanno i luoghi.
+- [x] Filtri che si aprono e chiudono dal titolo (Rubens, 19/11), spenti di base e accesi dal tema con
+      `wmwp_search_collapsible_facets`: pulsante nel `legend` con `aria-expanded` e `aria-controls`, aperto
+      all'inizio solo il filtro con una voce scelta, focus che resta sul pulsante dopo il ridisegno. «Show more» in
+      italiano diventa «Mostra di più», come nei filtri dei post del sito.
 - [x] Card del POI con immagine, nome, inizio del testo e il tipo di contenuto, come il risultato di ricerca di
       Drupal, che non mostra la tipologia; link al dettaglio; il tema la può sostituire come quella dei percorsi.
 - [x] [UX] Shard che non risponde e nessuna copia: il gruppo e il tab mostrano l'errore della sorgente, senza un
@@ -134,7 +143,7 @@ piano»). Si fa prima di tutto il resto, e si chiude con il controllo che nulla 
 ## Out of scope
 
 - Indice dei POI nello shard.
-- Filtri dei POI oltre `poi-type`.
+- Filtri dei POI oltre il tipo e i luoghi (per esempio i percorsi vicini o gli enti, che `pois.geojson` non ha).
 - Mappa dei POI nella ricerca.
 
 ## Moduli toccati
@@ -148,10 +157,11 @@ piano»). Si fa prima di tutto il resto, e si chiude con il controllo che nulla 
 - `templates/track.php`: avviso e percorribilità nel template di base.
 - `includes/search.php`: sorgente `pois` nel registro e registrazione dello script.
 - `includes/detail-index.php`: la copia di `pois.geojson` tiene i campi della ricerca.
-- `includes/search-pois.php` (nuovo): endpoint REST di ricerca nella copia.
-- `assets/js/source-pois.js` (nuovo): sorgente JS che interroga l'endpoint.
+- `includes/search-pois.php` (nuovo): endpoint REST di ricerca nella copia, con le faccette dei luoghi.
+- `assets/js/source-pois.js` (nuovo): sorgente JS che interroga l'endpoint, anche con i filtri dei luoghi.
 - `assets/js/search-logic.js`: valore per i risultati senza il campo di un filtro.
-- `assets/js/search.js`: attributo `lang` sui testi della card e sui valori delle faccette che ripiegano su un'altra
+- `assets/js/search.js`: filtri che si aprono e chiudono (`wmwp_search_collapsible_facets` in `includes/search.php`);
+  attributo `lang` sui testi della card e sui valori delle faccette che ripiegano su un'altra
   lingua (`titleLang`, `metaLang`, `lang`).
 - `includes/settings.php`: testo dell'impostazione della base degli indirizzi (il tipo delle tracce lo sceglie il
   tema). `templates/card.php` non è servito.

@@ -40,9 +40,16 @@ $poi         = function ( int $id, array $name, string $description, array $type
 			'feature_image' => $image,
 			// Una voce come stringa JSON, come nella risposta dello shard
 			'taxonomies'    => 2 === $id ? wp_json_encode( [ 'poi-type' => $types ] ) : [ 'poi-type' => $types ],
+			// Luoghi come li dà lo shard (regione, area, settore CAI, provincia, comune); una voce come stringa JSON
+			'taxonomyWheres' => 2 === $id ? wp_json_encode( $GLOBALS['wmwp_test_wheres'][ $id ] ?? [] ) : ( $GLOBALS['wmwp_test_wheres'][ $id ] ?? [] ),
 		],
 	];
 };
+$GLOBALS['wmwp_test_wheres'] = [
+	1 => [ 'Sardegna', 'Area G (Nord-EST)', 'ZNUG6', 'Nuoro', 'Bolotana' ],
+	2 => [ 'Sardegna', 'Area G (Nord-EST)', 'Nuoro', 'Bolotana' ],
+	3 => [ 'Sardegna', 'Area T (Centrale)', 'Oristano', 'Ghilarza' ],
+];
 $features    = [
 	$poi( 1, [ 'it' => 'Nuraghe Losa' ], '<p>Vicino a <b>Bolotana</b> &amp; dintorni.</p>', [ $type_site, $type_nuraghe ], [ 'thumbnail' => 'https://x.example/t.jpg' ] ),
 	$poi( 2, [ 'it' => 'Bolotana centro' ], '<p>Il paese</p>', [ $type_site ] ),
@@ -199,6 +206,60 @@ $check( 'Sites' === ( $labels['siti'] ?? '' ) && 'Nuraghi' === ( $labels['nuragh
 $filtered = $get( [ 'q' => 'bolotana', 'poi_type' => [ 'fonti' ] ] )->get_data();
 $check( 1 === ( $filtered['total'] ?? null ) && [ 3 ] === array_column( (array) $filtered['items'], 'id' ), 'filtro per tipo' );
 $check( 4 === array_sum( array_column( (array) ( $filtered['facets'][0]['values'] ?? [] ), 'count' ) ), 'la faccetta conta sui risultati del testo, non sul filtro scelto' );
+
+// 6b. Filtri dei luoghi (oc:9000): faccette `list` della source con `field` taxonomyWheres, che il tema aggiunge dopo
+// quella dei tipi; include, include_pattern, exclude ed exclude_pattern come per i percorsi (search-logic.js). Ogni
+// faccetta conta senza il proprio filtro e con gli altri; OR dentro un filtro, AND fra i filtri; voci scelte a 0 restano
+$check( [ 'Sardegna', 'Area G (Nord-EST)', 'ZNUG6', 'Nuoro', 'Bolotana' ] === ( $copy[0]['wheres'] ?? null ) && [ 'Sardegna', 'Area G (Nord-EST)', 'Nuoro', 'Bolotana' ] === ( $copy[1]['wheres'] ?? null ) && [] === ( $copy[3]['wheres'] ?? null ), 'luoghi nella copia (anche da stringa JSON): ' . wp_json_encode( array_column( (array) $copy, 'wheres' ) ) );
+$luoghi = function ( array $sources ): array {
+	// Al posto delle faccette dopo quella dei tipi, comprese quelle che il tema attivo aggiunge
+	$sources['pois']['facets'] = array_merge(
+		array_slice( (array) $sources['pois']['facets'], 0, 1 ),
+		[
+			[ 'key' => 'area', 'label' => 'Area', 'type' => 'list', 'field' => 'taxonomyWheres', 'include_pattern' => '^Area ' ],
+			[ 'key' => 'provincia', 'label' => 'Provincia', 'type' => 'list', 'field' => 'taxonomyWheres', 'include' => [ 'Nuoro', 'Oristano' ] ],
+			[ 'key' => 'comune', 'label' => 'Comune', 'type' => 'list', 'field' => 'taxonomyWheres', 'exclude' => [ 'Sardegna', 'Nuoro', 'Oristano' ], 'exclude_pattern' => '^(Area |Z[A-Z]{3}[0-9]+$)' ],
+		]
+	);
+	return $sources;
+};
+add_filter( 'wp_package_search_sources', $luoghi, 99 );
+$voci = function ( array $data, string $key ): array {
+	foreach ( (array) ( $data['facets'] ?? [] ) as $facet ) {
+		if ( $key === ( $facet['key'] ?? '' ) ) {
+			return array_map( fn( $v ) => [ $v['id'], $v['count'], $v['selected'] ], (array) $facet['values'] );
+		}
+	}
+	return [ 'assente' ];
+};
+$all = $get()->get_data();
+$check( [ 'poi-type', 'area', 'provincia', 'comune' ] === array_column( (array) ( $all['facets'] ?? [] ), 'key' ), 'faccette: tipi e poi i luoghi, nell\'ordine della source: ' . wp_json_encode( array_column( (array) ( $all['facets'] ?? [] ), 'key' ) ) );
+$check( [ [ 'Area G (Nord-EST)', 2, false ], [ 'Area T (Centrale)', 1, false ] ] === $voci( $all, 'area' ), 'area: ' . wp_json_encode( $voci( $all, 'area' ) ) );
+$check( [ [ 'Nuoro', 2, false ], [ 'Oristano', 1, false ] ] === $voci( $all, 'provincia' ), 'provincia: ' . wp_json_encode( $voci( $all, 'provincia' ) ) );
+$check( [ [ 'Bolotana', 2, false ], [ 'Ghilarza', 1, false ] ] === $voci( $all, 'comune' ), 'comune senza regione, aree, settori e province: ' . wp_json_encode( $voci( $all, 'comune' ) ) );
+$nuoro = $get( [ 'filter' => [ 'provincia' => [ 'Nuoro' ] ] ] )->get_data();
+$check( 2 === ( $nuoro['total'] ?? null ) && [ 2, 1 ] === array_column( (array) ( $nuoro['items'] ?? [] ), 'id' ), 'provincia Nuoro: due POI' );
+$check( [ [ 'Nuoro', 2, true ], [ 'Oristano', 1, false ] ] === $voci( $nuoro, 'provincia' ), 'provincia Nuoro: la provincia conta senza il proprio filtro ' . wp_json_encode( $voci( $nuoro, 'provincia' ) ) );
+$check( [ [ 'siti', 2, false ], [ 'nuraghi', 1, false ] ] === $voci( $nuoro, 'poi-type' ), 'provincia Nuoro: i tipi contano con la provincia ' . wp_json_encode( $voci( $nuoro, 'poi-type' ) ) );
+$check( [ [ 'Bolotana', 2, false ] ] === $voci( $nuoro, 'comune' ), 'provincia Nuoro: solo i comuni di Nuoro ' . wp_json_encode( $voci( $nuoro, 'comune' ) ) );
+$both = $get( [ 'filter' => [ 'provincia' => [ 'Nuoro', 'Oristano' ] ] ] )->get_data();
+$check( 3 === ( $both['total'] ?? null ), 'due province: OR dentro il filtro' );
+$none = $get( [ 'poi_type' => [ 'fonti' ], 'filter' => [ 'provincia' => [ 'Nuoro' ] ] ] )->get_data();
+$check( 0 === ( $none['total'] ?? null ) && [ [ 'Oristano', 1, false ], [ 'Nuoro', 0, true ] ] === $voci( $none, 'provincia' ), 'fonti e Nuoro: nessun POI, Nuoro scelta resta a 0 ' . wp_json_encode( $voci( $none, 'provincia' ) ) );
+$odd = $get( [ 'filter' => [ 'inventato' => [ 'x' ], 'comune' => 'Bolotana', 'area' => [ [ 'a' ] ] ] ] );
+$check( 200 === $odd->get_status() && 4 === ( $odd->get_data()['total'] ?? null ), 'filtri sconosciuti o non liste: ignorati' );
+$check( 0 === ( $get( [ 'filter' => [ 'comune' => [ 'Sardegna' ] ] ] )->get_data()['total'] ?? null ), 'un valore che la faccetta esclude non trova nulla, come per i percorsi' );
+remove_filter( 'wp_package_search_sources', $luoghi, 99 );
+// Copia senza i luoghi (scritta da una versione di prima): risponde, e la ricostruzione che li aggiunge parte subito
+$senza = array_map( fn( $poi ) => array_diff_key( $poi, [ 'wheres' => true ] ), (array) $copy );
+update_option( 'wmwp_poi_search_copy', $senza, false );
+wp_clear_scheduled_hook( WMWP_DETAIL_CRON_HOOK );
+delete_option( WMWP_DETAIL_REBUILT_AT );
+$old  = $get();
+$next = wp_next_scheduled( WMWP_DETAIL_CRON_HOOK );
+$check( 200 === $old->get_status() && 4 === ( $old->get_data()['total'] ?? null ) && false !== $next && $next <= time() + MINUTE_IN_SECONDS, 'copia senza luoghi: 200 e ricostruzione programmata' );
+wp_clear_scheduled_hook( WMWP_DETAIL_CRON_HOOK );
+update_option( 'wmwp_poi_search_copy', $copy, false );
 
 // 7. q lungo: accettato e troncato a 200
 $long = $get( [ 'q' => str_repeat( 'a', 500 ) ] );

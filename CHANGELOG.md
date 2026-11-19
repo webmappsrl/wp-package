@@ -24,6 +24,13 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le ve
   tipo scelto resta con conteggio 0 e il suo nome); senza copia, o con una copia nel formato di prima (testo cercabile
   in una stringa sola), risponde 503 e programma la ricostruzione dell'indice.
   `assets/js/source-pois.js`; nomi della faccetta e `type_label` della card presi dalla source (oc:9000).
+- Ricerca dei POI: faccette dei luoghi che il tema aggiunge alla source (`type` `list`, `field` `taxonomyWheres`, con
+  `include`, `include_pattern`, `exclude`, `exclude_pattern` come per i percorsi), luoghi nella copia (`wheres`),
+  parametro `filter[<chiave>][]` della rotta; ogni faccetta, tipi compresi, conta senza il proprio filtro e con gli
+  altri (oc:9000).
+- Filtri della ricerca che si aprono e chiudono dal titolo, accesi dal tema con il filtro
+  `wmwp_search_collapsible_facets` (pulsante con `aria-expanded` nel `legend`, aperto all'inizio solo il filtro con una
+  voce scelta); «Show more» in italiano diventa «Mostra di più» (oc:9000).
 - Card della ricerca: `titleLang` e `metaLang`, la lingua del testo quando ripiega su un'altra; `lang` anche sui valori
   delle faccette; la Card li marca con l'attributo `lang` (WCAG 3.1.2, `L.langFor()`) (oc:9000).
 - Faccette: proprietà `missing`, il valore per i risultati senza il campo, valido per il filtro e per i conteggi

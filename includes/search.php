@@ -227,6 +227,8 @@ function wmwp_enqueue_search_assets( array $sources, array $params ): void {
 		'params'  => $params,
 		'sources' => array_values( $sources ),
 		'lang'    => wmwp_current_lang(),
+		// Filtri che si aprono e chiudono dal titolo (oc:9000): spenti di base, il tema li accende con il filtro
+		'collapsible_facets' => (bool) apply_filters( 'wmwp_search_collapsible_facets', false ),
 		// La mappa pesa 800 KB: la pagina la carica solo al primo passaggio alla vista «Mappa». Carta di base e colori
 		// dei layer sono quelli dell'app (wmwp_app_map_config)
 		'map'     => wmwp_map_assets() + [

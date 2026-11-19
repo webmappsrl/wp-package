@@ -333,7 +333,7 @@ msgstr "Mostra meno"
 
 #: assets/js/search.js:1087
 msgid "Show more"
-msgstr "Mostra altro"
+msgstr "Mostra di più"
 
 #: assets/js/search.js:1132
 msgid "Previous page"

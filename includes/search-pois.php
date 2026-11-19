@@ -6,6 +6,11 @@
  * (`wmwp_detail_index_rebuild`) il plugin tiene una copia ridotta in un'opzione a parte (`wmwp_poi_search_copy`, senza
  * autoload), senza un secondo download né un cron nuovo. La rotta `GET wmwp/v1/pois` cerca lì, con pagine e faccetta dei
  * tipi calcolate sul server (un `pois.geojson` pesa 6 MB: il browser non lo scarica).
+ *
+ * Il tema può aggiungere alla source, dopo la faccetta dei tipi, faccette dei luoghi: `type` `list` con `field`
+ * `taxonomyWheres` e le stesse chiavi `include`, `include_pattern`, `exclude`, `exclude_pattern` delle faccette dei
+ * percorsi (search-logic.js), per dividere i luoghi in area, provincia, comune… La rotta le legge dalla source
+ * (wmwp_search_sources()) e le riceve come `filter[<chiave>][]`.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -93,10 +98,11 @@ function wmwp_poi_search_by_lang( string $searchable, array $names ): array {
 
 /**
  * Copia per la ricerca dalle feature di `pois.geojson`: id, nome e estratto per lingua, testo cercabile per lingua
- * (wmwp_poi_search_by_lang()), immagine e tipi. Un POI senza id si salta.
+ * (wmwp_poi_search_by_lang()), immagine, tipi e luoghi (`taxonomyWheres`, per le faccette dei luoghi). Un POI senza id
+ * si salta.
  *
  * @param array<int, mixed> $features Feature di pois.geojson.
- * @return list<array{id: int, name: array, searchable: array<string, string>, excerpt: array, image: ?string, types: list<array>}>
+ * @return list<array{id: int, name: array, searchable: array<string, string>, excerpt: array, image: ?string, types: list<array>, wheres: list<string>}>
  */
 function wmwp_poi_search_build( array $features ): array {
 	$copy = [];
@@ -135,6 +141,7 @@ function wmwp_poi_search_build( array $features ): array {
 			'excerpt'    => $exc,
 			'image'      => is_string( $src ) && '' !== $src ? $src : null,
 			'types'      => $types,
+			'wheres'     => array_values( array_unique( array_filter( array_map( fn( $where ) => is_scalar( $where ) ? trim( (string) $where ) : '', wmwp_poi_search_array( $props['taxonomyWheres'] ?? [] ) ), 'strlen' ) ) ),
 		];
 	}
 	return $copy;
@@ -168,6 +175,50 @@ function wmwp_poi_search_commit(): void {
 	if ( null !== $pending ) {
 		update_option( WMWP_POI_SEARCH_OPTION, $pending, false );
 	}
+}
+
+/**
+ * Programma la ricostruzione dell'indice, che riscrive la copia, il prima possibile: subito, o alla fine dell'attesa
+ * fra due ricostruzioni (WMWP_DETAIL_REBUILD_INTERVAL), perché un evento girato prima la salterebbe. Una volta sola,
+ * anche con molte richieste.
+ */
+function wmwp_poi_search_schedule_rebuild(): void {
+	$when = max( time(), (int) get_option( WMWP_DETAIL_REBUILT_AT, 0 ) + WMWP_DETAIL_REBUILD_INTERVAL );
+	$next = wp_next_scheduled( WMWP_DETAIL_CRON_HOOK );
+	if ( false === $next || $next > $when + MINUTE_IN_SECONDS ) {
+		wp_schedule_single_event( $when, WMWP_DETAIL_CRON_HOOK );
+	}
+}
+
+/**
+ * Faccette dei luoghi della source `pois` (`type` `list`, `field` `taxonomyWheres`), con la chiave che la source usa
+ * nell'indirizzo.
+ *
+ * @return list<array<string, mixed>>
+ */
+function wmwp_poi_search_place_facets(): array {
+	$facets = [];
+	foreach ( (array) ( wmwp_search_sources()['pois']['facets'] ?? [] ) as $facet ) {
+		if ( is_array( $facet ) && 'list' === ( $facet['type'] ?? '' ) && 'taxonomyWheres' === ( $facet['field'] ?? '' ) && '' !== (string) ( $facet['key'] ?? '' ) ) {
+			$facets[] = $facet;
+		}
+	}
+	return $facets;
+}
+
+/** Un luogo vale per la faccetta (include, include_pattern, exclude, exclude_pattern, come keepValue() di search-logic.js). */
+function wmwp_poi_search_keep_place( array $facet, string $value ): bool {
+	$match = fn( string $pattern ): bool => 1 === @preg_match( '#' . str_replace( '#', '\\#', $pattern ) . '#u', $value ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+	if ( isset( $facet['include'] ) && ! in_array( $value, (array) $facet['include'], true ) ) {
+		return false;
+	}
+	if ( ! empty( $facet['include_pattern'] ) && ! $match( (string) $facet['include_pattern'] ) ) {
+		return false;
+	}
+	if ( isset( $facet['exclude'] ) && in_array( $value, (array) $facet['exclude'], true ) ) {
+		return false;
+	}
+	return ! ( ! empty( $facet['exclude_pattern'] ) && $match( (string) $facet['exclude_pattern'] ) );
 }
 
 add_action(
@@ -204,6 +255,19 @@ add_action(
 						'default'           => [],
 						'sanitize_callback' => fn( $value ) => array_values( array_filter( array_map( 'strval', array_filter( (array) $value, 'is_scalar' ) ), 'strlen' ) ),
 					],
+					// Filtri dei luoghi: filter[<chiave della faccetta>][]=valore; un filtro che non è una lista vale come assente
+					'filter'   => [
+						'default'           => [],
+						'sanitize_callback' => function ( $value ) {
+							$filters = [];
+							foreach ( is_array( $value ) ? $value : [] as $key => $values ) {
+								if ( is_array( $values ) ) {
+									$filters[ (string) $key ] = array_values( array_filter( array_map( 'strval', array_filter( $values, 'is_scalar' ) ), 'strlen' ) );
+								}
+							}
+							return $filters;
+						},
+					],
 				],
 			]
 		);
@@ -219,14 +283,12 @@ function wmwp_poi_search_rest( WP_REST_Request $request ) {
 	if ( ! is_array( $copy ) || ( false !== $first && ! is_array( $first['searchable'] ?? null ) ) ) {
 		// Senza copia (subito dopo l'aggiornamento del plugin, o con un sito nuovo) la ricostruzione dell'indice, che la
 		// scrive, parte subito invece che al giro orario del cron: una volta sola, anche con molte richieste
-		// Durante l'attesa fra due ricostruzioni (WMWP_DETAIL_REBUILD_INTERVAL) l'evento va alla fine dell'attesa: un
-		// evento girato prima la salterebbe, e ogni richiesta ne programmerebbe un altro
-		$when = max( time(), (int) get_option( WMWP_DETAIL_REBUILT_AT, 0 ) + WMWP_DETAIL_REBUILD_INTERVAL );
-		$next = wp_next_scheduled( WMWP_DETAIL_CRON_HOOK );
-		if ( false === $next || $next > $when + MINUTE_IN_SECONDS ) {
-			wp_schedule_single_event( $when, WMWP_DETAIL_CRON_HOOK );
-		}
+		wmwp_poi_search_schedule_rebuild();
 		return new WP_Error( 'wmwp_poi_search_unavailable', __( 'Points of interest are not available right now.', 'wp-package' ), [ 'status' => 503 ] );
+	}
+	// Una copia senza i luoghi (scritta prima delle faccette dei luoghi) risponde, senza luoghi, e si riscrive subito
+	if ( false !== $first && ! array_key_exists( 'wheres', $first ) ) {
+		wmwp_poi_search_schedule_rebuild();
 	}
 	$lang   = (string) $request->get_param( 'lang' );
 	$lang   = '' !== $lang ? $lang : wmwp_current_lang();
@@ -265,11 +327,47 @@ function wmwp_poi_search_rest( WP_REST_Request $request ) {
 		}
 	);
 
-	// Faccetta dei tipi sui risultati del testo: un POI con più tipi conta in ognuno. I tipi scelti restano anche con
-	// 0 risultati, con il loro nome, come fa search-logic.js per le faccette dei percorsi
+	// Valori di ogni POI per ogni faccetta: i tipi e, per le faccette dei luoghi, i luoghi che la faccetta tiene. OR
+	// dentro un filtro, AND fra i filtri; ogni faccetta conta sui POI che passano gli altri filtri, non il proprio (come
+	// computeFacets() di search-logic.js). Un POI con più valori conta in ognuno
+	$places  = wmwp_poi_search_place_facets();
+	$filters = (array) $request->get_param( 'filter' );
+	$picked  = [ WMWP_POI_SEARCH_FACET => $chosen ];
+	foreach ( $places as $facet ) {
+		$picked[ (string) $facet['key'] ] = array_values( (array) ( $filters[ (string) $facet['key'] ] ?? [] ) );
+	}
+	foreach ( $found as $i => $row ) {
+		$values = [ WMWP_POI_SEARCH_FACET => array_values( array_unique( array_map( 'strval', array_column( (array) $row['poi']['types'], 'identifier' ) ) ) ) ];
+		foreach ( $places as $facet ) {
+			$values[ (string) $facet['key'] ] = array_values( array_filter( array_map( 'strval', (array) ( $row['poi']['wheres'] ?? [] ) ), fn( $where ) => wmwp_poi_search_keep_place( $facet, $where ) ) );
+		}
+		$found[ $i ]['values'] = $values;
+	}
+	$passes = function ( array $row, string $skip ) use ( $picked ): bool {
+		foreach ( $picked as $key => $wanted ) {
+			if ( $key !== $skip && $wanted && ! array_intersect( $wanted, $row['values'][ $key ] ) ) {
+				return false;
+			}
+		}
+		return true;
+	};
+	$sort = function ( array &$values ): void {
+		usort(
+			$values,
+			function ( array $a, array $b ): int {
+				return $b['count'] <=> $a['count'] ?: strnatcasecmp( $a['label'], $b['label'] );
+			}
+		);
+	};
+
+	// Faccetta dei tipi. I tipi scelti restano anche con 0 risultati, con il loro nome, come fa search-logic.js per le
+	// faccette dei percorsi
 	$counts = [];
 	$labels = [];
 	foreach ( $found as $row ) {
+		if ( ! $passes( $row, WMWP_POI_SEARCH_FACET ) ) {
+			continue;
+		}
 		foreach ( (array) $row['poi']['types'] as $type ) {
 			$key            = (string) $type['identifier'];
 			$counts[ $key ] = ( $counts[ $key ] ?? 0 ) + 1;
@@ -302,12 +400,7 @@ function wmwp_poi_search_rest( WP_REST_Request $request ) {
 			'selected' => in_array( (string) $key, $chosen, true ),
 		];
 	}
-	usort(
-		$values,
-		function ( array $a, array $b ): int {
-			return $b['count'] <=> $a['count'] ?: strnatcasecmp( $a['label'], $b['label'] );
-		}
-	);
+	$sort( $values );
 	$facets = [
 		[
 			'key'      => WMWP_POI_SEARCH_FACET,
@@ -317,16 +410,40 @@ function wmwp_poi_search_rest( WP_REST_Request $request ) {
 		],
 	];
 
-	if ( $chosen ) {
-		$found = array_values(
-			array_filter(
-				$found,
-				function ( array $row ) use ( $chosen ): bool {
-					return (bool) array_intersect( $chosen, array_column( (array) $row['poi']['types'], 'identifier' ) );
+	// Faccette dei luoghi: il valore è il nome del luogo, che fa anche da etichetta
+	foreach ( $places as $facet ) {
+		$key    = (string) $facet['key'];
+		$counts = [];
+		foreach ( $found as $row ) {
+			if ( $passes( $row, $key ) ) {
+				foreach ( $row['values'][ $key ] as $where ) {
+					$counts[ $where ] = ( $counts[ $where ] ?? 0 ) + 1;
 				}
-			)
-		);
+			}
+		}
+		foreach ( $picked[ $key ] as $where ) {
+			$counts[ $where ] = $counts[ $where ] ?? 0;
+		}
+		$values = [];
+		foreach ( $counts as $where => $count ) {
+			$values[] = [
+				'id'       => (string) $where,
+				'label'    => (string) $where,
+				'lang'     => null,
+				'count'    => $count,
+				'selected' => in_array( (string) $where, $picked[ $key ], true ),
+			];
+		}
+		$sort( $values );
+		$facets[] = [
+			'key'      => $key,
+			'label'    => (string) ( $facet['label'] ?? $key ),
+			'disabled' => false,
+			'values'   => $values,
+		];
 	}
+
+	$found = array_values( array_filter( $found, fn( array $row ): bool => $passes( $row, '' ) ) );
 	$per_page = (int) $request->get_param( 'per_page' );
 	$page     = (int) $request->get_param( 'page' );
 	$template = wmwp_detail_link_template( 'poi' );

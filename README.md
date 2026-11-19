@@ -39,15 +39,22 @@ nome.
 
 La source dei punti di interesse (`pois`, oc:9000) non scarica niente nel browser: chiede alla rotta REST
 `GET wmwp/v1/pois` del plugin (`includes/search-pois.php`, `assets/js/source-pois.js`), che cerca in una copia ridotta
-di `pois.geojson` e calcola pagine e faccetta dei tipi sul server (il file pesa 6 MB). Parametri: `q`, `page`,
-`per_page` (al massimo 48), `lang`, `poi_type[]`. Risposta: `total`, `items` (nel formato delle card, vedi
-«JavaScript») e `facets` (la faccetta `poi-type`, i cui valori portano `lang`). La ricerca cerca nella lingua della
+di `pois.geojson` e calcola pagine e faccette sul server (il file pesa 6 MB). Parametri: `q`, `page`,
+`per_page` (al massimo 48), `lang`, `poi_type[]`, `filter[<chiave>][]`. Risposta: `total`, `items` (nel formato delle
+card, vedi «JavaScript») e `facets` (la faccetta `poi-type`, i cui valori portano `lang`, poi quelle dei luoghi).
+Faccette dei luoghi: il tema le aggiunge alla source dopo quella dei tipi, con `type` `list`, `field`
+`taxonomyWheres` e le chiavi `include`, `include_pattern`, `exclude`, `exclude_pattern` delle faccette dei percorsi
+(per dividere i luoghi in area, provincia, comune…); la rotta le legge dalla source e le riceve come
+`filter[<chiave>][]`. Ogni faccetta conta senza il proprio filtro e con gli altri (OR dentro un filtro, AND fra i
+filtri), come `computeFacets()` per i percorsi. La ricerca cerca nella lingua della
 pagina con ripiego sull'italiano; un tipo scelto resta nella faccetta anche con 0 risultati. La copia sta
 nell'opzione `wmwp_poi_search_copy` (senza autoload) e si scrive con la ricostruzione dell'indice dei dettagli, dallo
 stesso download di `pois.geojson`, solo quando l'indice accetta il nuovo elenco; la disattivazione la toglie e
 `uninstall.php` la cancella; un'app senza POI ha una copia vuota (0 risultati). Senza copia (subito dopo
 l'aggiornamento, o con un sito nuovo), o con una copia di un formato precedente (testo cercabile in una stringa sola),
-la rotta risponde 503 e programma subito la ricostruzione dell'indice, invece di aspettare il cron orario.
+la rotta risponde 503 e programma subito la ricostruzione dell'indice, invece di aspettare il cron orario. Una copia
+senza i luoghi (scritta prima della 0.5.0 finale) risponde, senza luoghi, e programma la ricostruzione allo stesso
+modo.
 
 ## Interfaccia pubblica
 
@@ -121,6 +128,12 @@ shard che non sta in `environment.ts` (es. in locale). **`wmwp_server_origin`** 
 del server WordPress, se diverso da quello del browser (es. WordPress in Docker: `http://host.docker.internal:8000`).
 Vale per tutte le richieste del server allo shard (config.json dell'app per carta e colori, indice e dettagli), che
 passano da `wmwp_server_url()`.
+
+**`wmwp_search_collapsible_facets`** — `true` per avere i filtri della ricerca che si aprono e chiudono dal titolo
+(predefinito `false`): il `legend` contiene un pulsante `.wmwp-facet__toggle` con `aria-expanded` e
+`aria-controls`, il titolo (`.wmwp-facet__title-text`) e `.wmwp-facet__chevron` per la freccia; il filtro aperto ha
+`.is-open`. All'apertura della pagina è aperto solo il filtro con una voce scelta; poi ognuno resta come l'ha lasciato
+chi cerca, finché la pagina non si ricarica. Lo stile (freccia compresa) è del tema.
 
 **`wmwp_track_kind_taxonomy`** — identifier della famiglia di tassonomia che dà il tipo delle tracce (predefinito `''`):
 la base degli indirizzi, il `kind` dell'indice dei dettagli e il tipo sulle card (`kind_field`). Il plugin non legge

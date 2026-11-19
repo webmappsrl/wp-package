@@ -72,6 +72,8 @@
   // Vero se dopo il prossimo disegno dei tab il focus va sul tab attivo
   var focusTab = false;
   var expandedFacets = {};
+  // Filtri aperti o chiusi a mano (config.collapsible_facets): senza una scelta, aperto solo il filtro con una voce scelta
+  var openFacets = {};
   var lastStatus = '';
   var statusTail = null;
   var defaultLabel = '';
@@ -1038,6 +1040,44 @@
       var expanded = !!expandedFacets[view.key];
       var ul = document.createElement('ul');
       ul.className = 'wmwp-facet__values';
+      // Filtri che si aprono e chiudono (config.collapsible_facets, oc:9000): il titolo diventa un pulsante con
+      // aria-expanded che mostra o nasconde le voci; all'apertura della pagina è aperto solo il filtro con una voce scelta
+      var open = true;
+      if (config.collapsible_facets) {
+        open = Object.prototype.hasOwnProperty.call(openFacets, view.key)
+          ? openFacets[view.key]
+          : view.values.some(function (value) { return value.selected; });
+        ul.id = 'wmwp-facet-' + String(view.key).replace(/[^A-Za-z0-9_-]/g, '-');
+        ul.hidden = !open;
+        fieldset.classList.toggle('is-open', open);
+        var title = legend.textContent;
+        legend.textContent = '';
+        var opener = document.createElement('button');
+        opener.type = 'button';
+        opener.className = 'wmwp-facet__toggle';
+        opener.setAttribute('aria-expanded', open ? 'true' : 'false');
+        opener.setAttribute('aria-controls', ul.id);
+        opener.dataset.key = view.key;
+        var titleText = document.createElement('span');
+        titleText.className = 'wmwp-facet__title-text';
+        titleText.textContent = title;
+        var chevron = document.createElement('span');
+        chevron.className = 'wmwp-facet__chevron';
+        chevron.setAttribute('aria-hidden', 'true');
+        opener.appendChild(titleText);
+        opener.appendChild(chevron);
+        opener.addEventListener('click', function () {
+          openFacets[view.key] = !open;
+          renderFacets(source, views);
+          var again = Array.prototype.find.call(dom.facets.querySelectorAll('.wmwp-facet__toggle'), function (button) {
+            return button.dataset.key === view.key;
+          });
+          if (again) {
+            again.focus();
+          }
+        });
+        legend.appendChild(opener);
+      }
       var hiddenCount = 0;
       view.values.forEach(function (value, index) {
         var li = document.createElement('li');
@@ -1094,6 +1134,7 @@
           }
         });
         toggle.dataset.key = view.key;
+        toggle.hidden = !open;
         fieldset.appendChild(toggle);
       }
       dom.facets.appendChild(fieldset);

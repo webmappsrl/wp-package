@@ -1,7 +1,7 @@
 /*
  * Source «pois» della ricerca (oc:9000): punti di interesse dalla rotta REST `wmwp/v1/pois` del plugin.
  *
- * Testo, pagine e conteggi dei tipi li calcola il server (la copia dei POI sta in un'opzione di WordPress): qui si
+ * Testo, pagine e conteggi dei tipi e dei luoghi li calcola il server (la copia dei POI sta in un'opzione di WordPress): qui si
  * costruisce la richiesta e si restituisce la risposta, già nella forma attesa da search.js. Una risposta non ok
  * (es. 503 senza copia) rifiuta la Promise, così la pagina mostra l'errore e non «0 risultati».
  */
@@ -35,6 +35,12 @@
       url.searchParams.set('lang', query.lang || '');
       ((query.filters || {})[facetKey] || []).forEach(function (id) {
         url.searchParams.append('poi_type[]', id);
+      });
+      // Le altre faccette della source (luoghi: area, provincia, comune…) vanno alla rotta come filter[chiave][]
+      (source.facets || []).slice(1).forEach(function (facet) {
+        ((query.filters || {})[facet.key] || []).forEach(function (id) {
+          url.searchParams.append('filter[' + facet.key + '][]', id);
+        });
       });
       return fetch(url.toString(), { signal: signal, headers: { Accept: 'application/json' } }).then(function (response) {
         if (!response.ok) {

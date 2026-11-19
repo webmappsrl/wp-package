@@ -48,6 +48,19 @@ test('senza testo né filtri non manda q né poi_type', async () => {
   assert.equal(url.searchParams.has('poi_type[]'), false);
 });
 
+test('le altre faccette della source (luoghi) vanno alla rotta come filter[chiave][]', async () => {
+  const { impl, calls } = load(
+    { ok: true, status: 200, json: () => Promise.resolve({ total: 0, items: [], facets: [] }) },
+    { facets: [{ key: 'tipo-poi' }, { key: 'provincia' }, { key: 'comune' }] }
+  );
+  await impl.search(query({ filters: { 'tipo-poi': ['siti'], provincia: ['Nuoro', 'Oristano'], altro: ['x'] } }), null);
+  const url = new URL(calls[0]);
+  assert.deepEqual(url.searchParams.getAll('poi_type[]'), ['siti']);
+  assert.deepEqual(url.searchParams.getAll('filter[provincia][]'), ['Nuoro', 'Oristano']);
+  assert.equal(url.searchParams.has('filter[comune][]'), false);
+  assert.equal(url.searchParams.has('filter[altro][]'), false);
+});
+
 test('una risposta non ok (503) rifiuta la Promise', async () => {
   const { impl } = load({ ok: false, status: 503, json: () => Promise.resolve({ code: 'wmwp_poi_search_unavailable' }) });
   await assert.rejects(impl.search(query(), null), /503/);
