@@ -219,8 +219,11 @@ function wmwp_detail_resolve( string $lang, string $path ): array {
 		return [ 'status' => 503 ];
 	}
 	$result = wmwp_detail_find( $index, $lang, $path );
-	// Anche il risultato del ripiego per slug può venire dall'indice vecchio (traccia che ha cambiato base): si ricostruisce
-	if ( ( 404 === $result['status'] || ! empty( $result['fallback'] ) ) && wmwp_detail_rebuild_allowed() ) {
+	// Anche il risultato del ripiego per slug può venire dall'indice vecchio (traccia che ha cambiato base): si ricostruisce.
+	// Non sotto una base che c'è solo nello storico (indirizzi vecchi, es. /node/ di una pagina editoriale, oc:9018): un
+	// elemento nuovo prende sempre una base dell'indice, e ricostruire non troverebbe niente
+	[ $base ] = wmwp_detail_split_path( $path );
+	if ( ( 404 === $result['status'] || ! empty( $result['fallback'] ) ) && in_array( $base, wmwp_detail_index_bases( $index ), true ) && wmwp_detail_rebuild_allowed() ) {
 		$index  = wmwp_detail_index( true ) ?? $index;
 		$result = wmwp_detail_find( $index, $lang, $path );
 	}

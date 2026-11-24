@@ -1,0 +1,922 @@
+{
+ "MAP": {
+  "filters": {
+   "activities": {
+    "type": "select",
+    "name": {
+     "it": "Attività",
+     "en": "Activity"
+    },
+    "options": [
+     {
+      "id": 1,
+      "identifier": "trekking",
+      "name": {
+       "it": "Dorsali escursionistiche a tappe (per esperti)",
+       "en": "Trekking (experts)"
+      }
+     },
+     {
+      "id": 8,
+      "identifier": "trail",
+      "name": {
+       "it": "Sentiero"
+      },
+      "icon_name": "txn-hiking"
+     },
+     {
+      "id": 4,
+      "identifier": "horse",
+      "name": {
+       "it": "Turismo equestre",
+       "en": "Horse"
+      }
+     },
+     {
+      "id": 3,
+      "identifier": "hiking",
+      "name": {
+       "it": "Alte vie",
+       "en": "High routes"
+      }
+     },
+     {
+      "id": 6,
+      "identifier": "nordic-walking",
+      "name": {
+       "it": "Passeggiate e Nordic Walk",
+       "en": "Nordic Walking"
+      }
+     }
+    ]
+   },
+   "layers": {
+    "type": "select",
+    "name": {
+     "it": "Tipo percorso",
+     "en": "Path type"
+    },
+    "options": [
+     {
+      "id": 11,
+      "identifier": 11,
+      "name": {
+       "it": "Sentieri"
+      },
+      "color": "#de1b0d"
+     },
+     {
+      "id": 10,
+      "identifier": 10,
+      "name": {
+       "it": "Itinerari"
+      },
+      "color": "#608d0d"
+     },
+     {
+      "id": 8,
+      "identifier": 8,
+      "name": {
+       "it": "Cammini di Sardegna"
+      },
+      "color": "#1a416f"
+     }
+    ]
+   },
+   "poi_types": {
+    "type": "select",
+    "name": {
+     "it": "Punti di interesse",
+     "en": "Points of interest"
+    },
+    "options": [
+     {
+      "identifier": "poi_type_disabled-access",
+      "name": {
+       "it": "Accessibilità"
+      },
+      "id": 20,
+      "icon_name": "txn-wheelchair"
+     },
+     {
+      "identifier": "poi_type_monumental-tree",
+      "name": {
+       "it": "Alberi monumentali"
+      },
+      "id": 1,
+      "icon_name": "txn-olive-tree"
+     },
+     {
+      "identifier": "poi_type_picnic-area",
+      "name": {
+       "it": "Area di sosta"
+      },
+      "id": 28,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_equipped-rest-area",
+      "name": {
+       "it": "Area sosta attrezzata"
+      },
+      "id": 3,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_bar",
+      "name": {
+       "it": "Bar"
+      },
+      "id": 23,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_natural-wood",
+      "name": {
+       "it": "Boschi, Parchi o aree forestali",
+       "en": "Woods, Parks or Forest Areas"
+      },
+      "id": 12,
+      "icon_name": "txn-natural"
+     },
+     {
+      "identifier": "poi_type_camping",
+      "name": {
+       "it": "Camping o Camper"
+      },
+      "id": 27,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_waterway-waterfall",
+      "name": {
+       "it": "Cascata"
+      },
+      "id": 5,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_foresteria",
+      "name": {
+       "it": "Fabbricati/case forestali"
+      },
+      "id": 6,
+      "icon_name": "txn-lodging"
+     },
+     {
+      "identifier": "poi_type_natural-cave-entrance",
+      "name": {
+       "it": "Grotte"
+      },
+      "id": 9,
+      "icon_name": "txn-cave-entrance"
+     },
+     {
+      "identifier": "poi_type_crossroads",
+      "name": {
+       "it": "Incroci - waypoint"
+      },
+      "id": 10,
+      "icon_name": "txn-guidepost"
+     },
+     {
+      "identifier": "poi_type_water-lake",
+      "name": {
+       "it": "Laghi e Corsi d'acqua"
+      },
+      "id": 7,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_places-of-transhumance",
+      "name": {
+       "it": "Luoghi della transumanza, ovili, pinnettos",
+       "en": "Places of transhumance and sheepfolds"
+      },
+      "id": 11,
+      "icon_name": "txn-horse"
+     },
+     {
+      "identifier": "poi_type_place-of-worship",
+      "name": {
+       "it": "Luoghi di memoria e di fede",
+       "en": "Places of memory and faith"
+      },
+      "id": 16,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_natural-park",
+      "name": {
+       "it": "Meraviglie della Geologia e del Paesaggio",
+       "en": "Wonders of Geology and Landscape"
+      },
+      "id": 17,
+      "icon_name": "txn-park-alt"
+     },
+     {
+      "identifier": "poi_type_nature",
+      "name": {
+       "it": "Meraviglie della Natura...",
+       "en": "Wonders of nature..."
+      },
+      "id": 15,
+      "icon_name": "txn-park"
+     },
+     {
+      "identifier": "poi_type_shop",
+      "name": {
+       "it": "Negozi"
+      },
+      "id": 24,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_archaeological-site",
+      "name": {
+       "it": "Nuraghi e altri luoghi storico-archeologici",
+       "en": "Nuraghi and other places of history and archaeology"
+      },
+      "id": 18,
+      "icon_name": "txn-ruins"
+     },
+     {
+      "identifier": "poi_type_parking",
+      "name": {
+       "it": "Parcheggi"
+      },
+      "id": 21,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_rifugio",
+      "name": {
+       "it": "Rifugio, presidi abitati"
+      },
+      "id": 8,
+      "icon_name": "refuge"
+     },
+     {
+      "identifier": "poi_type_environmental-education",
+      "name": {
+       "it": "Scoprire e imparare"
+      },
+      "id": 2,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_viewpoint",
+      "name": {
+       "it": "Sguardi dall'alto",
+       "en": "Panoramic views"
+      },
+      "id": 19,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_natural-sprin",
+      "name": {
+       "it": "Sorgente - fonte naturale"
+      },
+      "id": 4,
+      "icon_name": "txn-spring"
+     },
+     {
+      "identifier": "poi_type_natural-spring",
+      "name": {
+       "it": "Sorgenti"
+      },
+      "id": 22,
+      "icon_name": "txn-spring"
+     },
+     {
+      "identifier": "poi_type_poi",
+      "name": {
+       "it": "Tappe del camminare...",
+       "en": "Long-distance-trail stages"
+      },
+      "id": 13,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_public-transport",
+      "name": {
+       "it": "Trasporti pubblici"
+      },
+      "id": 25,
+      "icon_name": "txn-bus"
+     },
+     {
+      "identifier": "poi_type_coast-seaside",
+      "name": {
+       "it": "Vicino al mare...",
+       "en": "Near the seacliffs"
+      },
+      "id": 14,
+      "icon_name": "txn-beach"
+     },
+     {
+      "identifier": "poi_type_tlc",
+      "name": {
+       "it": "Visibilità TLC"
+      },
+      "id": 26,
+      "icon_name": "communications-tower"
+     }
+    ]
+   },
+   "poi_type": {
+    "type": "select",
+    "name": {
+     "it": "Punti di interesse",
+     "en": "Points of interest"
+    },
+    "options": [
+     {
+      "identifier": "poi_type_disabled-access",
+      "name": {
+       "it": "Accessibilità"
+      },
+      "id": 20,
+      "icon_name": "txn-wheelchair"
+     },
+     {
+      "identifier": "poi_type_monumental-tree",
+      "name": {
+       "it": "Alberi monumentali"
+      },
+      "id": 1,
+      "icon_name": "txn-olive-tree"
+     },
+     {
+      "identifier": "poi_type_picnic-area",
+      "name": {
+       "it": "Area di sosta"
+      },
+      "id": 28,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_equipped-rest-area",
+      "name": {
+       "it": "Area sosta attrezzata"
+      },
+      "id": 3,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_bar",
+      "name": {
+       "it": "Bar"
+      },
+      "id": 23,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_natural-wood",
+      "name": {
+       "it": "Boschi, Parchi o aree forestali",
+       "en": "Woods, Parks or Forest Areas"
+      },
+      "id": 12,
+      "icon_name": "txn-natural"
+     },
+     {
+      "identifier": "poi_type_camping",
+      "name": {
+       "it": "Camping o Camper"
+      },
+      "id": 27,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_waterway-waterfall",
+      "name": {
+       "it": "Cascata"
+      },
+      "id": 5,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_foresteria",
+      "name": {
+       "it": "Fabbricati/case forestali"
+      },
+      "id": 6,
+      "icon_name": "txn-lodging"
+     },
+     {
+      "identifier": "poi_type_natural-cave-entrance",
+      "name": {
+       "it": "Grotte"
+      },
+      "id": 9,
+      "icon_name": "txn-cave-entrance"
+     },
+     {
+      "identifier": "poi_type_crossroads",
+      "name": {
+       "it": "Incroci - waypoint"
+      },
+      "id": 10,
+      "icon_name": "txn-guidepost"
+     },
+     {
+      "identifier": "poi_type_water-lake",
+      "name": {
+       "it": "Laghi e Corsi d'acqua"
+      },
+      "id": 7,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_places-of-transhumance",
+      "name": {
+       "it": "Luoghi della transumanza, ovili, pinnettos",
+       "en": "Places of transhumance and sheepfolds"
+      },
+      "id": 11,
+      "icon_name": "txn-horse"
+     },
+     {
+      "identifier": "poi_type_place-of-worship",
+      "name": {
+       "it": "Luoghi di memoria e di fede",
+       "en": "Places of memory and faith"
+      },
+      "id": 16,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_natural-park",
+      "name": {
+       "it": "Meraviglie della Geologia e del Paesaggio",
+       "en": "Wonders of Geology and Landscape"
+      },
+      "id": 17,
+      "icon_name": "txn-park-alt"
+     },
+     {
+      "identifier": "poi_type_nature",
+      "name": {
+       "it": "Meraviglie della Natura...",
+       "en": "Wonders of nature..."
+      },
+      "id": 15,
+      "icon_name": "txn-park"
+     },
+     {
+      "identifier": "poi_type_shop",
+      "name": {
+       "it": "Negozi"
+      },
+      "id": 24,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_archaeological-site",
+      "name": {
+       "it": "Nuraghi e altri luoghi storico-archeologici",
+       "en": "Nuraghi and other places of history and archaeology"
+      },
+      "id": 18,
+      "icon_name": "txn-ruins"
+     },
+     {
+      "identifier": "poi_type_parking",
+      "name": {
+       "it": "Parcheggi"
+      },
+      "id": 21,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_rifugio",
+      "name": {
+       "it": "Rifugio, presidi abitati"
+      },
+      "id": 8,
+      "icon_name": "refuge"
+     },
+     {
+      "identifier": "poi_type_environmental-education",
+      "name": {
+       "it": "Scoprire e imparare"
+      },
+      "id": 2,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_viewpoint",
+      "name": {
+       "it": "Sguardi dall'alto",
+       "en": "Panoramic views"
+      },
+      "id": 19,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_natural-sprin",
+      "name": {
+       "it": "Sorgente - fonte naturale"
+      },
+      "id": 4,
+      "icon_name": "txn-spring"
+     },
+     {
+      "identifier": "poi_type_natural-spring",
+      "name": {
+       "it": "Sorgenti"
+      },
+      "id": 22,
+      "icon_name": "txn-spring"
+     },
+     {
+      "identifier": "poi_type_poi",
+      "name": {
+       "it": "Tappe del camminare...",
+       "en": "Long-distance-trail stages"
+      },
+      "id": 13,
+      "icon_name": null
+     },
+     {
+      "identifier": "poi_type_public-transport",
+      "name": {
+       "it": "Trasporti pubblici"
+      },
+      "id": 25,
+      "icon_name": "txn-bus"
+     },
+     {
+      "identifier": "poi_type_coast-seaside",
+      "name": {
+       "it": "Vicino al mare...",
+       "en": "Near the seacliffs"
+      },
+      "id": 14,
+      "icon_name": "txn-beach"
+     },
+     {
+      "identifier": "poi_type_tlc",
+      "name": {
+       "it": "Visibilità TLC"
+      },
+      "id": 26,
+      "icon_name": "communications-tower"
+     }
+    ]
+   },
+   "track_duration": {
+    "type": "slider",
+    "identifier": "duration_forward",
+    "name": {
+     "it": "Tempo di percorrenza",
+     "en": "Travel time"
+    },
+    "units": "min",
+    "steps": 30,
+    "min": 30,
+    "max": 900
+   },
+   "track_distance": {
+    "type": "slider",
+    "identifier": "distance",
+    "name": {
+     "it": "Lunghezza del sentiero",
+     "en": "Path length"
+    },
+    "units": "km",
+    "steps": 3,
+    "min": 1,
+    "max": 30
+   }
+  },
+  "layers": [
+   {
+    "id": 8,
+    "name": {
+     "it": "Cammini di Sardegna"
+    },
+    "title": {
+     "it": "Cammini di Sardegna"
+    },
+    "style": {
+     "color": "#1a416f"
+    }
+   },
+   {
+    "id": 9,
+    "name": {
+     "it": "Sentieri Accessibili"
+    },
+    "title": {
+     "it": "Sentieri Accessibili"
+    },
+    "style": {
+     "color": "#ffff00"
+    }
+   },
+   {
+    "id": 10,
+    "name": {
+     "it": "Itinerari"
+    },
+    "title": {
+     "it": "Itinerari"
+    },
+    "style": {
+     "color": "#608d0d"
+    }
+   },
+   {
+    "id": 11,
+    "name": {
+     "it": "Sentieri"
+    },
+    "title": {
+     "it": "Sentieri"
+    },
+    "style": {
+     "color": "#de1b0d"
+    }
+   },
+   {
+    "id": 1,
+    "name": {
+     "en": "Area G (Nord-EST)",
+     "it": "Area G (Nord-EST)"
+    },
+    "title": {
+     "en": "Area G (Nord-EST)",
+     "it": "Area G (Nord-EST)"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 2,
+    "name": {
+     "en": "Area E (Nord-OVEST)",
+     "it": "Area E (Nord-OVEST)"
+    },
+    "title": {
+     "en": "Area E (Nord-OVEST)",
+     "it": "Area E (Nord-OVEST)"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 3,
+    "name": {
+     "en": "Area D (Sud-OVEST)",
+     "it": "Area D (Sud-OVEST)"
+    },
+    "title": {
+     "en": "Area D (Sud-OVEST)",
+     "it": "Area D (Sud-OVEST)"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 4,
+    "name": {
+     "en": "Area C (Sud-EST )",
+     "it": "Area C (Sud-EST )"
+    },
+    "title": {
+     "en": "Area C (Sud-EST )",
+     "it": "Area C (Sud-EST )"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 5,
+    "name": {
+     "en": "Area T (Centrale)",
+     "it": "Area T (Centrale)"
+    },
+    "title": {
+     "en": "Area T (Centrale)",
+     "it": "Area T (Centrale)"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 6,
+    "name": {
+     "en": "Area B (Centro-EST)",
+     "it": "Area B (Centro-EST)"
+    },
+    "title": {
+     "en": "Area B (Centro-EST)",
+     "it": "Area B (Centro-EST)"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 12,
+    "name": {
+     "en": "Area F (Nord)",
+     "it": "Area F (Nord)"
+    },
+    "title": {
+     "en": "Area F (Nord)",
+     "it": "Area F (Nord)"
+    },
+    "style": {
+     "color": null
+    }
+   },
+   {
+    "id": 7,
+    "name": {
+     "en": "Area F (Nord)",
+     "it": "Area G (Nord-EST)"
+    },
+    "title": {
+     "en": "Area F (Nord)",
+     "it": "Area G (Nord-EST)"
+    },
+    "style": {
+     "color": null
+    }
+   }
+  ],
+  "controls": {
+   "overlays": [
+    {
+     "label": {
+      "it": "Dettagli Mappa"
+     },
+     "type": "title",
+     "url": null
+    },
+    {
+     "label": {
+      "en": "Geographical areas",
+      "it": "Aree geografiche"
+     },
+     "type": "button",
+     "url": "https://forestas.uat.maphub.it/wmfe/forestasuat/1/feature-collection/3.geojson"
+    },
+    {
+     "label": {
+      "en": "Forest areas",
+      "it": "Aree forestali"
+     },
+     "type": "button",
+     "url": "https://forestas.uat.maphub.it/wmfe/forestasuat/1/feature-collection/4.geojson"
+    },
+    {
+     "label": {
+      "it": "Aree Catastali"
+     },
+     "type": "button",
+     "url": "https://forestas.uat.maphub.it/wmfe/forestasuat/1/feature-collection/2.geojson"
+    },
+    {
+     "label": {
+      "en": "Mountain areas",
+      "it": "Aree montane"
+     },
+     "type": "button",
+     "url": "https://forestas.uat.maphub.it/wmfe/forestasuat/1/feature-collection/5.geojson"
+    },
+    {
+     "label": {
+      "en": "Hunting areas",
+      "it": "Aree no caccia"
+     },
+     "type": "button",
+     "url": "https://forestas.uat.maphub.it/wmfe/forestasuat/1/feature-collection/6.geojson"
+    }
+   ]
+  }
+ },
+ "LABELS": {
+  "taxonomies": {
+   "activity": {
+    "labels": {
+     "it": "Attività",
+     "en": "Activities"
+    },
+    "tab": "Activities"
+   },
+   "theme": {
+    "labels": {
+     "it": "Temi",
+     "en": "Themes"
+    },
+    "tab": "General"
+   },
+   "poi-type": {
+    "labels": {
+     "it": "Tipologie POI",
+     "en": "Poi Types",
+     "fr": "Types de POI",
+     "es": "Tipos de POI",
+     "de": "POI-Typen"
+    },
+    "tab": "General"
+   },
+   "where": {
+    "labels": {
+     "it": "Zone",
+     "en": "Zones"
+    },
+    "tab": "General"
+   },
+   "hiking-difficulty": {
+    "labels": {
+     "it": "Difficoltà escursionistica"
+    },
+    "tab": "Activities"
+   },
+   "mtb-difficulty": {
+    "labels": {
+     "it": "Difficoltà mountain bike"
+    },
+    "tab": "Activities"
+   },
+   "horse-difficulty": {
+    "labels": {
+     "it": "Difficoltà ippovia"
+    },
+    "tab": "Activities"
+   },
+   "nordic-walking-difficulty": {
+    "labels": {
+     "it": "Difficoltà Nordic Walking"
+    },
+    "tab": "Activities"
+   },
+   "soft-mobility-difficulty": {
+    "labels": {
+     "it": "Difficoltà mobilità dolce"
+    },
+    "tab": "Activities"
+   },
+   "educational-trails-difficulty": {
+    "labels": {
+     "it": "Difficoltà sentiero didattico"
+    },
+    "tab": "Activities"
+   },
+   "inclusivity-difficulty": {
+    "labels": {
+     "it": "Difficoltà di accessibilità"
+    },
+    "tab": "Inclusivity"
+   },
+   "inclusivity-disabilities": {
+    "labels": {
+     "it": "Disabilità accolte"
+    },
+    "tab": "Inclusivity"
+   },
+   "route-type": {
+    "labels": {
+     "it": "Tipo percorso"
+    },
+    "tab": "General"
+   },
+   "itinerary-type": {
+    "labels": {
+     "it": "Tipologia itinerario"
+    },
+    "tab": "General"
+   },
+   "warnings": {
+    "labels": {
+     "it": "Avvertenze"
+    },
+    "tab": "General"
+   },
+   "validation-status": {
+    "labels": {
+     "it": "Stato validazione"
+    },
+    "tab": "Status"
+   },
+   "walkability-status": {
+    "labels": {
+     "en": "Walkability",
+     "it": "Percorribilità"
+    },
+    "tab": "Status"
+   }
+  }
+ }
+}

@@ -96,3 +96,27 @@ test('la chiave si cambia per nome, non per posizione: un\'altra faccetta della 
   const result = await impl.search(query(), null);
   assert.deepEqual(result.facets.map((facet) => facet.key), ['altro', 'tipo-poi']);
 });
+
+// oc:9018: le aree degli overlay vanno alla rotta come layer[] (il parametro delle app), non come filter[chiave][]
+test('le faccette delle aree vanno alla rotta come layer[]', async () => {
+  const { impl, calls } = load(
+    { ok: true, status: 200, json: () => Promise.resolve({ total: 0, items: [], facets: [] }) },
+    { facets: [{ key: 'tipo-poi' }, { key: 'area-1', param: 'layer', ids: ['3'] }, { key: 'area-2', param: 'layer', ids: ['50'] }] }
+  );
+  await impl.search(query({ filters: { 'area-1': ['3'], 'area-2': ['50'] } }), null);
+  const url = new URL(calls[0]);
+  assert.deepEqual(url.searchParams.getAll('layer[]'), ['3', '50']);
+  assert.equal(url.searchParams.getAll('filter[area-1][]').length, 0);
+});
+
+// oc:9018: senza la faccetta dei tipi (config.json non scaricato) la prima faccetta è un'area, e non diventa i tipi
+test('senza faccetta dei tipi, le aree non vanno alla rotta come poi_type[]', async () => {
+  const { impl, calls } = load(
+    { ok: true, status: 200, json: () => Promise.resolve({ total: 0, items: [], facets: [] }) },
+    { facets: [{ key: 'area-1', param: 'layer', ids: ['3'], field: 'layers' }] }
+  );
+  await impl.search(query({ filters: { 'area-1': ['3'] } }), null);
+  const url = new URL(calls[0]);
+  assert.deepEqual(url.searchParams.getAll('poi_type[]'), []);
+  assert.deepEqual(url.searchParams.getAll('layer[]'), ['3']);
+});

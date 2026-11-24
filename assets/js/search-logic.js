@@ -71,6 +71,8 @@
         }
         id = String(item.identifier);
         label = localized(item.name, lang);
+        // Nome che ripiega sull'italiano: va marcato con lang (oc:9018)
+        var termLang = item.name && typeof item.name === 'object' && !item.name[lang] && item.name.it ? 'it' : '';
       } else {
         if (item == null || item === '') {
           return;
@@ -85,7 +87,14 @@
       if (!keepValue(facet, id)) {
         return;
       }
-      result.push({ id: id, label: String(labels[id] || label || id).trim() });
+      var value = { id: id, label: String(labels[id] || label || id).trim() };
+      // Lingua del nome dato dal config.json (`lang_labels`, oc:9018), per marcarlo con `lang` se non è quella della pagina
+      if (labels[id] && facet.lang_labels && facet.lang_labels[id]) {
+        value.lang = String(facet.lang_labels[id]);
+      } else if (!labels[id] && langFor(termLang, lang)) {
+        value.lang = langFor(termLang, lang);
+      }
+      result.push(value);
     });
     return facet.groups ? groupValues(result, facet.groups) : result;
   }
@@ -109,13 +118,21 @@
   }
 
   // Gruppi (`groups`): più valori sotto una voce sola (il tema può anche dare un gruppo per valore, per avere l'ordine
-  // e i nomi suoi, come i filtri degli stati di Forestas, oc:9000). Un valore che non sta in nessun gruppo non conta.
+  // e i nomi suoi, come i filtri degli stati di Forestas, oc:9000). Un valore che non sta in nessun gruppo (uno stato
+  // nuovo creato nello shard) si tiene dopo i gruppi, con il suo nome (oc:9018).
   function groupValues(values, groups) {
     var out = [];
+    var grouped = {};
     groups.forEach(function (group) {
       var hit = values.some(function (value) { return (group.values || []).indexOf(value.id) !== -1; });
+      (group.values || []).forEach(function (id) { grouped[id] = true; });
       if (hit) {
         out.push({ id: String(group.id), label: String(group.label || group.id) });
+      }
+    });
+    values.forEach(function (value) {
+      if (!grouped[value.id]) {
+        out.push(value);
       }
     });
     return out;
@@ -243,6 +260,7 @@
       }
       var counts = {};
       var labels = {};
+      var langs = {};
       filterHits(hits, facets, selected, lang, facet.key).forEach(function (hit) {
         var seen = {};
         facetValues(hit, facet, lang).forEach(function (value) {
@@ -252,19 +270,43 @@
           seen[value.id] = true;
           counts[value.id] = (counts[value.id] || 0) + 1;
           labels[value.id] = value.label;
+          if (value.lang) {
+            langs[value.id] = value.lang;
+          }
         });
       });
-      chosen.forEach(function (id) {
-        if (!(id in counts)) {
+      // Un valore scelto che con gli altri filtri non ha risultati resta, con 0: nome e lingua da un percorso qualsiasi
+      // che lo ha (anche le faccette di termini senza `labels` né `groups`), poi dal tema, poi l'identifier
+      var zero = chosen.filter(function (id) { return !(id in counts); });
+      if (zero.length) {
+        var known = {};
+        hits.some(function (hit) {
+          facetValues(hit, facet, lang).forEach(function (value) {
+            if (zero.indexOf(value.id) !== -1 && !known[value.id]) {
+              known[value.id] = value;
+            }
+          });
+          return zero.every(function (id) { return known[id]; });
+        });
+        zero.forEach(function (id) {
           counts[id] = 0;
           var group = (facet.groups || []).find(function (item) { return String(item.id) === id; });
-          labels[id] = (facet.labels && facet.labels[id]) || (group && group.label) || id;
-        }
-      });
+          labels[id] = (known[id] && known[id].label) || (facet.labels && facet.labels[id]) || (group && group.label) || id;
+          if (known[id] && known[id].lang) {
+            langs[id] = known[id].lang;
+          } else if (!known[id] && facet.labels && facet.labels[id] && facet.lang_labels && facet.lang_labels[id]) {
+            langs[id] = String(facet.lang_labels[id]);
+          }
+        });
+      }
       var order = facet.order || [];
       view.values = Object.keys(counts)
         .map(function (id) {
-          return { id: id, label: labels[id], count: counts[id], selected: chosen.indexOf(id) !== -1 };
+          var value = { id: id, label: labels[id], count: counts[id], selected: chosen.indexOf(id) !== -1 };
+          if (langs[id]) {
+            value.lang = langs[id];
+          }
+          return value;
         })
         .sort(function (a, b) {
           var ia = order.indexOf(a.id);
@@ -278,18 +320,31 @@
     });
   }
 
-  // Stato della ricerca dall'indirizzo. `params` dà i nomi dei parametri ({q, tab, page}).
+  // Faccetta con un parametro condiviso (oc:9018: le aree degli overlay stanno tutte in `layer`, come nelle app):
+  // { key, param, ids }. Le altre si danno con la sola chiave.
+  function sharedParam(item) {
+    return item && typeof item === 'object' && item.param ? item : null;
+  }
+
+  // Stato della ricerca dall'indirizzo. `params` dà i nomi dei parametri ({q, tab, page}); `facetKeys` le chiavi dei
+  // filtri, o le faccette con un parametro condiviso, che ne prendono solo i loro `ids`.
   function parseState(search, params, facetKeys) {
     var query = new URLSearchParams(search || '');
     var page = parseInt(query.get(params.page) || '', 10);
     var filters = {};
-    (facetKeys || []).forEach(function (key) {
-      var raw = query.get(key);
-      if (raw) {
-        var list = raw.split(',').map(function (v) { return v.trim(); }).filter(Boolean);
-        if (list.length) {
-          filters[key] = list;
-        }
+    var split = function (raw) {
+      return String(raw || '').split(',').map(function (v) { return v.trim(); }).filter(Boolean);
+    };
+    (facetKeys || []).forEach(function (item) {
+      var shared = sharedParam(item);
+      var key = shared ? shared.key : item;
+      var list = split(query.get(shared ? shared.param : key));
+      if (shared) {
+        var ids = (shared.ids || []).map(String);
+        list = list.filter(function (id) { return ids.indexOf(id) !== -1; });
+      }
+      if (list.length) {
+        filters[key] = list;
       }
     });
     return {
@@ -302,8 +357,15 @@
     };
   }
 
-  function stateToSearch(state, params) {
+  function stateToSearch(state, params, facetKeys) {
     var query = new URLSearchParams();
+    var shared = {};
+    (facetKeys || []).forEach(function (item) {
+      if (sharedParam(item)) {
+        shared[item.key] = item.param;
+      }
+    });
+    var merged = {};
     if (state.text) {
       query.set(params.q, state.text);
     }
@@ -315,9 +377,20 @@
     }
     Object.keys(state.filters || {}).forEach(function (key) {
       var list = state.filters[key] || [];
-      if (list.length) {
-        query.set(key, list.join(','));
+      if (!list.length) {
+        return;
       }
+      if (shared[key]) {
+        merged[shared[key]] = (merged[shared[key]] || []).concat(list.map(String));
+        return;
+      }
+      query.set(key, list.join(','));
+    });
+    // Un parametro condiviso: un valore solo, senza doppioni, in ordine numerico (lo stesso stato, lo stesso indirizzo)
+    Object.keys(merged).forEach(function (param) {
+      var list = merged[param].filter(function (id, i, all) { return all.indexOf(id) === i; });
+      list.sort(function (a, b) { return (Number(a) - Number(b)) || (a < b ? -1 : a > b ? 1 : 0); });
+      query.set(param, list.join(','));
     });
     if (state.map && params.view && params.map) {
       query.set(params.view, params.map);

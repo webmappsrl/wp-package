@@ -408,6 +408,39 @@ function wmwp_detail_current(): ?array {
 	return isset( $GLOBALS['wmwp_detail'] ) && is_array( $GLOBALS['wmwp_detail'] ) ? $GLOBALS['wmwp_detail'] : null;
 }
 
+/**
+ * Indirizzo della scheda PDF di un elemento sullo shard (oc:9018; stampa del wm-package, oc:8982):
+ * `<shard>/print/ec-track/<id>` o `<shard>/print/ec-poi/<id>`, come dice `docs/resources/Print.md` del wm-package (il
+ * JSON degli elementi non porta il link). Vuoto se la stampa dell'app è spenta (`OPTIONS.ec_pdf_enabled` del
+ * config.json; la chiave deprecata `print_track_enable` non conta) o se la copia del config.json non c'è ancora: il
+ * template allora non mostra il pulsante. `lang` va solo se l'app ha quella lingua, altrimenti lo shard risponderebbe
+ * 404; senza, la scheda esce nella lingua di default dell'app. Non chiama lo shard.
+ *
+ * Il link apre una rotta che accoda la generazione del PDF: il template lo marca `rel="nofollow"`.
+ *
+ * @param string $type `track` o `poi`.
+ * @param int    $id   Id dello shard.
+ * @param string $lang Lingua della pagina, anche con la variante di WPML (`en-us`).
+ */
+function wmwp_detail_print_url( string $type, int $id, string $lang ): string {
+	$routes = [
+		'track' => 'ec-track',
+		'poi'   => 'ec-poi',
+	];
+	if ( $id <= 0 || ! isset( $routes[ $type ] ) ) {
+		return '';
+	}
+	$config = wmwp_app_config();
+	$origin = wmwp_configured_api_urls()['origin'];
+	if ( null === $config || '' === $origin || true !== ( $config['OPTIONS']['ec_pdf_enabled'] ?? null ) ) {
+		return '';
+	}
+	$url       = $origin . '/print/' . $routes[ $type ] . '/' . $id;
+	$code      = strtolower( (string) strtok( $lang, '-_' ) );
+	$available = (array) ( $config['LANGUAGES']['available'] ?? [] );
+	return in_array( $code, $available, true ) ? add_query_arg( 'lang', $code, $url ) : $url;
+}
+
 /** Vero se la richiesta è un dettaglio che lo shard non ha potuto dare (pagina 503). */
 function wmwp_detail_unavailable(): bool {
 	return ! empty( $GLOBALS['wmwp_detail_unavailable'] );

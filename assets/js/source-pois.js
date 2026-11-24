@@ -19,7 +19,13 @@
   // Chiave della faccetta dei tipi nella risposta della rotta (WMWP_POI_SEARCH_FACET) e chiave del filtro dei tipi,
   // dalla prima faccetta della source (il tema la può cambiare, es. tipo-poi)
   var ROUTE_FACET = 'poi-type';
-  var facetKey = ((source.facets || [])[0] || {}).key || ROUTE_FACET;
+  // La faccetta dei tipi è la prima che non è un luogo (oc:9018): senza config.json la faccetta dei tipi dal config può
+  // mancare, e la prima sarebbe un'area. Stessa regola di wmwp_poi_search_is_place() della rotta
+  var isPlace = function (facet) {
+    return !!(facet && (facet.param || facet.field === 'taxonomyWheres' || facet.field === 'layers'));
+  };
+  var typeFacet = (source.facets || []).find(function (facet) { return !isPlace(facet); }) || null;
+  var facetKey = (typeFacet && typeFacet.key) || ROUTE_FACET;
 
   api.registerSource('pois', {
     search: function (query, signal) {
@@ -36,10 +42,11 @@
       ((query.filters || {})[facetKey] || []).forEach(function (id) {
         url.searchParams.append('poi_type[]', id);
       });
-      // Le altre faccette della source (luoghi: area, provincia, comune…) vanno alla rotta come filter[chiave][]
-      (source.facets || []).slice(1).forEach(function (facet) {
+      // Le altre faccette della source (luoghi: area, provincia, comune…) vanno alla rotta come filter[chiave][]; le aree
+      // degli overlay (parametro condiviso, oc:9018) come layer[]
+      (source.facets || []).filter(function (facet) { return facet !== typeFacet; }).forEach(function (facet) {
         ((query.filters || {})[facet.key] || []).forEach(function (id) {
-          url.searchParams.append('filter[' + facet.key + '][]', id);
+          url.searchParams.append(facet.param ? facet.param + '[]' : 'filter[' + facet.key + '][]', id);
         });
       });
       return fetch(url.toString(), { signal: signal, headers: { Accept: 'application/json' } }).then(function (response) {

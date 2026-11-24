@@ -41,8 +41,14 @@ function wmwp_walkability( array $properties, string $lang ): array {
 		$name = $from_term;
 	} elseif ( '' !== $from_list['text'] ) {
 		$name = $from_list;
-	} else {
+	} elseif ( '' !== $from_term['text'] ) {
 		$name = $from_term;
+	} else {
+		// Un termine senza nome: il suo identifier, come un valore fuori registro (oc:9018)
+		$name = [
+			'text' => (string) ( $identifier ?? '' ),
+			'lang' => null,
+		];
 	}
 
 	$walkability = is_array( $properties['walkability'] ?? null ) ? $properties['walkability'] : [];

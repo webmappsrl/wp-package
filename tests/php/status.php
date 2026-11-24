@@ -35,7 +35,10 @@ $check(
 	is_array( $walk ) && [ 'walkability-status-unknown', 'walkability-status-not-walkable', 'walkability-status-partially-walkable', 'walkability-status-walkable' ] === array_column( $walk['states'], 'identifier' ),
 	'quattro stati in ordine'
 );
-$check( [ 'it' => 'Parzialmente percorribile', 'en' => 'Partially walkable' ] === ( $walk['states'][2]['name'] ?? null ), 'nomi italiano e inglese' );
+// oc:9018: nomi e icone dai termini dello shard; nel registro resta solo il nome dello stato di assenza, che non arriva
+// con nessun dato (un percorso senza stato non ha il termine)
+$check( ! isset( $walk['states'][2]['name'] ), 'nessun nome per gli stati che arrivano con il termine' );
+$check( [ 'it' => 'Sconosciuta', 'en' => 'Unknown' ] === ( $walk['states'][0]['name'] ?? null ), 'nome dello stato di assenza' );
 
 // 2. Livello e totale: tante tacche quanti sono gli stati della famiglia nello shard, assenza compresa; ogni stato
 // accende fino alla sua posizione, lo stato di assenza nessuna (Rubens, 18/11)
@@ -49,7 +52,8 @@ $check( [ 0, 4, false ] === $level( 'walkability-status-nuovo' ), 'stato che il 
 $check( [ 0, 0, false ] === array_values( wmwp_status_level( 'nessuna-famiglia', 'x' ) ), 'famiglia che il registro non conosce' );
 
 // 3. Nomi nella lingua
-$check( [ 'text' => 'Partially walkable', 'lang' => 'en' ] === wmwp_status_name( 'walkability-status', 'walkability-status-partially-walkable', 'en' ), 'nome inglese' );
+$check( [ 'text' => 'Unknown', 'lang' => 'en' ] === wmwp_status_name( 'walkability-status', 'walkability-status-unknown', 'en' ), 'nome inglese dello stato di assenza' );
+$check( [ 'text' => '', 'lang' => null ] === wmwp_status_name( 'walkability-status', 'walkability-status-walkable', 'it' ), 'nessun nome di registro per uno stato con il termine' );
 $check( [ 'text' => '', 'lang' => null ] === wmwp_status_name( 'walkability-status', 'walkability-status-nuovo', 'it' ), 'nome di uno stato sconosciuto' );
 
 // 4. Famiglia del tema, senza stato di assenza, e uno stato in più

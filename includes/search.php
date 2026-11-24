@@ -63,11 +63,13 @@ function wmwp_search_params(): array {
 }
 
 /**
- * Chiavi dei filtri di una source che non possono stare nell'indirizzo così come sono (query var di WordPress o nome
- * di un parametro della ricerca): prendono il prefisso `f_`, anche nel `meta_facet`, con un avviso `_doing_it_wrong`.
+ * Chiavi dei filtri di una source che non possono stare nell'indirizzo così come sono (query var di WordPress, nome di
+ * un parametro della ricerca o il parametro delle aree degli overlay, `layer`): prendono il prefisso `f_`, anche nel
+ * `meta_facet`, con un avviso `_doing_it_wrong`.
  */
 function wmwp_safe_facet_keys( array $source ): array {
-	$taken = array_merge( wmwp_reserved_query_vars(), array_values( array_intersect_key( wmwp_search_params(), array_flip( [ 'q', 'tab', 'page', 'view' ] ) ) ) );
+	$taken   = array_merge( wmwp_reserved_query_vars(), array_values( array_intersect_key( wmwp_search_params(), array_flip( [ 'q', 'tab', 'page', 'view' ] ) ) ) );
+	$taken[] = WMWP_APP_AREA_PARAM;
 	foreach ( (array) ( $source['facets'] ?? [] ) as $i => $facet ) {
 		$key = isset( $facet['key'] ) ? (string) $facet['key'] : '';
 		if ( '' === $key || ! in_array( $key, $taken, true ) ) {
@@ -185,7 +187,9 @@ function wmwp_search_sources(): array {
 		if ( isset( $normalized[ $id ]['badge_exclude'] ) ) {
 			$normalized[ $id ]['badge_exclude'] = array_values( array_map( 'strval', (array) $normalized[ $id ]['badge_exclude'] ) );
 		}
-		$normalized[ $id ] = wmwp_safe_facet_keys( $normalized[ $id ] );
+		// Faccette dal config.json dell'app (`from_config`, `from_families`, oc:9018)
+		$normalized[ $id ]['facets'] = wmwp_app_expand_facets( array_values( (array) $normalized[ $id ]['facets'] ), wmwp_current_lang() );
+		$normalized[ $id ]           = wmwp_safe_facet_keys( $normalized[ $id ] );
 	}
 	return $normalized;
 }

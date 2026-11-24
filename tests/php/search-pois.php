@@ -57,6 +57,10 @@ $features    = [
 	$poi( 4, [ 'it' => 'Domus' ], '<p>Tomba</p>', [] ),
 ];
 
+// Le faccette del tema attivo (es. tipi dal config.json, oc:9018) non devono cambiare il test: si tolgono e si rimettono
+$theme_sources = $GLOBALS['wp_filter']['wp_package_search_sources'] ?? null;
+remove_all_filters( 'wp_package_search_sources' );
+
 $shard = [ 'features' => $features ];
 $fake  = function ( $pre, $args, $url ) use ( &$shard ) {
 	if ( false !== strpos( $url, 'pois.geojson' ) ) {
@@ -259,6 +263,15 @@ $old  = $get();
 $next = wp_next_scheduled( WMWP_DETAIL_CRON_HOOK );
 $check( 200 === $old->get_status() && 4 === ( $old->get_data()['total'] ?? null ) && false !== $next && $next <= time() + MINUTE_IN_SECONDS, 'copia senza luoghi: 200 e ricostruzione programmata' );
 wp_clear_scheduled_hook( WMWP_DETAIL_CRON_HOOK );
+// Copia della 0.5.0, senza il punto dei POI (review interna di oc:9018): risponde, e la ricostruzione che lo aggiunge,
+// con le aree dei POI, parte subito invece che al giro orario
+$senza_punto = array_map( fn( $poi ) => array_diff_key( $poi, [ 'point' => true ] ), (array) $copy );
+update_option( 'wmwp_poi_search_copy', $senza_punto, false );
+delete_option( WMWP_DETAIL_REBUILT_AT );
+$old  = $get();
+$next = wp_next_scheduled( WMWP_DETAIL_CRON_HOOK );
+$check( 200 === $old->get_status() && false !== $next && $next <= time() + MINUTE_IN_SECONDS, 'copia senza il punto: 200 e ricostruzione programmata' );
+wp_clear_scheduled_hook( WMWP_DETAIL_CRON_HOOK );
 update_option( 'wmwp_poi_search_copy', $copy, false );
 
 // 7. q lungo: accettato e troncato a 200
@@ -289,6 +302,32 @@ $check( 12 === count( $page2['items'] ?? [] ), 'seconda pagina' );
 $huge = $get( [ 'per_page' => 48, 'page' => '99999999999999999999' ] );
 $check( 200 === $huge->get_status() && [] === ( $huge->get_data()['items'] ?? null ) && 60 === ( $huge->get_data()['total'] ?? null ), 'pagina enorme: 200 senza risultati' );
 
+// 8b. Tipi dal config.json (oc:9018): il tema dà la faccetta dei tipi completata da MAP.filters (include, order, labels,
+// lang_labels): solo i tipi pubblicati, nell'ordine e con i nomi del config.json, il nome del filtro del tema
+$shard['features'] = $features;
+$rebuild();
+$from_config = function ( $sources ) {
+	$sources['pois']['facets'][0] = [
+		'key'         => WMWP_POI_SEARCH_FACET,
+		'label'       => 'Tipi',
+		'type'        => 'terms',
+		'include'     => [ 'fonti', 'siti' ],
+		'order'       => [ 'fonti', 'siti' ],
+		'labels'      => [ 'siti' => 'Siti dal config' ],
+		'lang_labels' => [ 'siti' => 'it' ],
+	];
+	return $sources;
+};
+add_filter( 'wp_package_search_sources', $from_config, 99 );
+$typed  = $get( [ 'lang' => 'en' ] )->get_data();
+$types  = $typed['facets'][0] ?? [];
+$ids    = array_column( (array) ( $types['values'] ?? [] ), 'id' );
+$sites  = array_values( array_filter( (array) ( $types['values'] ?? [] ), fn( $v ) => 'siti' === $v['id'] ) )[0] ?? [];
+$check( [ 'fonti', 'siti' ] === $ids, 'tipi dal config.json: solo quelli pubblicati, nel loro ordine (' . implode( ',', $ids ) . ')' );
+$check( 'Siti dal config' === ( $sites['label'] ?? '' ) && 'it' === ( $sites['lang'] ?? '' ), 'tipi dal config.json: nome e lingua del config' );
+$check( 'Tipi' === ( $types['label'] ?? '' ), 'tipi dal config.json: nome del filtro dalla faccetta' );
+remove_filter( 'wp_package_search_sources', $from_config, 99 );
+
 // 9. Un'app senza POI ha una copia vuota: «0 risultati», non «non disponibile» (review interna oc:9000)
 $shard['features'] = [];
 $rebuild();
@@ -297,6 +336,9 @@ $check( [] === get_option( 'wmwp_poi_search_copy', null ) && 200 === $empty->get
 
 remove_filter( 'pre_http_request', $fake, 10 );
 delete_option( 'wmwp_detail_index_rejects' );
+if ( null !== $theme_sources ) {
+	$GLOBALS['wp_filter']['wp_package_search_sources'] = $theme_sources;
+}
 
 if ( $failures ) {
 	echo 'FAIL: ' . implode( '; ', $failures ) . "\n";
