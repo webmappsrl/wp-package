@@ -27,8 +27,16 @@
   var typeFacet = (source.facets || []).find(function (facet) { return !isPlace(facet); }) || null;
   var facetKey = (typeFacet && typeFacet.key) || ROUTE_FACET;
 
+  // Griglia dei POI (oc:9003): la prima ricerca usa la pagina che il server ha già disegnato
+  var initial = api.config.grid ? api.config.initial || null : null;
+
   api.registerSource('pois', {
     search: function (query, signal) {
+      if (initial) {
+        var first = initial;
+        initial = null;
+        return Promise.resolve(first);
+      }
       if (!source.endpoint) {
         return Promise.reject(new Error('wp-package: POI endpoint not configured'));
       }

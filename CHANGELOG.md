@@ -3,6 +3,36 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.7.0 — 2026-11-25
+
+### Aggiunto
+- Copia delle tracce (`includes/tracks-copy.php`): option `wmwp_tracks_copy` scritta dal rebuild dell'indice dei
+  dettagli accanto alla copia dei POI, quindi solo da un rebuild accettato (ultima copia buona); solo i campi di card e
+  faccette, ordinata per nome italiano senza spazi ai lati, letta una volta per richiesta; `wmwp_tracks_copy()` e
+  `wmwp_tracks_layer_for_term()` (il layer con più tracce di un termine) (oc:9003).
+- Comando WP-CLI `wp wmwp tracks-copy load <file>` (copia da una risposta dell'API Elastic salvata, per le prove) e
+  `refresh` (oc:9003).
+- Rotta `GET wmwp/v1/tracks` (`grid`, `lang`, `pg`, `q` e i parametri delle faccette): filtra, conta e pagina sulla
+  copia con le regole di `search-logic.js` rifatte in PHP (`includes/grid.php`); 503 senza copia o se lo shard non
+  risponde al testo, 404 per una griglia che il tema non configura (oc:9003).
+- Shortcode `[wmwp_tracks_grid]` e `[wmwp_pois_grid]`, configurati dal filter `wmwp_grid_config` (`type`, `layer`,
+  `facets`, `per_page`, `nouns`, `search_label`, `placeholder`): la ricerca in modalità griglia (una source, niente
+  tab), con la prima pagina (card, numero, link alle pagine) già nell'HTML; una griglia per pagina (oc:9003).
+- Source `grid` (`assets/js/source-grid-tracks.js`) sulla rotta delle tracce, con il risultato iniziale del server; la
+  source `pois` accetta lo stesso risultato iniziale (oc:9003).
+- Testo cercato nella griglia dei percorsi: gli id li dà l'API dello shard, come nella ricerca unica, con la risposta
+  nell'object cache (mai nei transient: la rotta è pubblica) e l'ordine di pertinenza di `rankByText()` (oc:9003).
+- Faccetta `slider` da un filtro `type: slider` di `MAP.filters` (`wmwp_app_slider_facet()`), anche nella ricerca
+  unica: due `input type="range"` con etichetta e `aria-valuetext`, estremi aperti (un cursore al suo estremo non
+  pone limiti), valore applicato dopo 600 ms; `L.lastStep()`, `L.sliderBounds()`, `L.sliderValue()` (oc:9003).
+
+### Cambiato
+- `wmwp_enqueue_search_assets()` accetta un terzo argomento con le chiavi in più per il JS (modalità griglia,
+  risultato iniziale) (oc:9003).
+- Dopo il cambio di pagina il focus va ai risultati quando sono disegnati, non prima: VoiceOver leggeva la pagina di
+  prima, «occupata» (oc:9003).
+- La disattivazione e la disinstallazione cancellano anche la copia delle tracce (oc:9003).
+
 ## 0.6.0 — 2026-11-24
 
 ### Aggiunto

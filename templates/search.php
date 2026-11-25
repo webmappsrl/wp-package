@@ -12,8 +12,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 ?>
 <div class="wmwp-search" data-wmwp="search">
-	<div class="wmwp-search__tabs" role="tablist" aria-label="<?php echo esc_attr__( 'Results by type', 'wp-package' ); ?>" data-wmwp="tabs"></div>
-	<div class="wmwp-search__panel" role="tabpanel" id="wmwp-panel" data-wmwp="panel">
+<?php
+	// Modalità griglia (oc:9003): una source sola, senza tab; la prima pagina arriva già dal server
+	$wmwp_grid = ! empty( $wmwp['grid'] );
+	?>
+	<div class="wmwp-search__tabs" role="tablist" aria-label="<?php echo esc_attr__( 'Results by type', 'wp-package' ); ?>" data-wmwp="tabs"<?php echo $wmwp_grid ? ' hidden' : ''; ?>></div>
+	<div class="wmwp-search__panel"<?php echo $wmwp_grid ? '' : ' role="tabpanel"'; ?> id="wmwp-panel" data-wmwp="panel">
 		<div class="wmwp-search__cols">
 			<div class="wmwp-search__filters" id="wmwp-filters" data-wmwp="filters" hidden>
 				<div class="wmwp-search__filters-head">
@@ -28,16 +32,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 				// distinti dal nome (WAI-ARIA, «landmark regions»)
 				?>
 				<form class="wmwp-search__form" role="search" method="get" action="" aria-labelledby="wmwp-search-label" data-wmwp="form">
-					<label class="wmwp-search__label" id="wmwp-search-label" for="wmwp-q" data-wmwp="search-label"><?php echo esc_html__( 'Search the site', 'wp-package' ); ?></label>
+					<label class="wmwp-search__label" id="wmwp-search-label" for="wmwp-q" data-wmwp="search-label"><?php echo esc_html( (string) ( $wmwp['search_label'] ?? __( 'Search the site', 'wp-package' ) ) ); ?></label>
 					<div class="wmwp-search__field">
-						<input class="wmwp-search__input" type="search" id="wmwp-q" name="<?php echo esc_attr( $wmwp['params']['q'] ); ?>" data-wmwp="input" autocomplete="off">
+						<input class="wmwp-search__input" type="search" id="wmwp-q" name="<?php echo esc_attr( $wmwp['params']['q'] ); ?>" value="<?php echo esc_attr( (string) ( $wmwp['text'] ?? '' ) ); ?>"<?php echo empty( $wmwp['placeholder'] ) ? '' : ' placeholder="' . esc_attr( (string) $wmwp['placeholder'] ) . '"'; ?> data-wmwp="input" autocomplete="off">
 						<button class="wmwp-search__submit" type="submit"><?php echo esc_html__( 'Search', 'wp-package' ); ?></button>
 					</div>
 				</form>
 				<button type="button" class="wmwp-search__filters-open" data-wmwp="filters-open" aria-controls="wmwp-filters" aria-expanded="false" hidden><?php echo esc_html__( 'Filters', 'wp-package' ); ?></button>
 				<div class="wmwp-search__active" data-wmwp="active" hidden></div>
 				<div class="wmwp-search__toolbar">
-					<p class="wmwp-search__status" role="status" data-wmwp="status"></p>
+					<p class="wmwp-search__status" role="status" data-wmwp="status"><?php echo esc_html( (string) ( $wmwp['initial_status'] ?? '' ) ); ?></p>
 					<?php
 					// Selettore Elenco | Mappa (tavola 2 del wireframe di oc:8952, `.seg`): compare nei tab la cui source ha la
 					// mappa. La vista sta nell'indirizzo (parametri `view` e `map`).
@@ -47,12 +51,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<button type="button" data-view="map" aria-pressed="false"><?php echo esc_html__( 'Map', 'wp-package' ); ?></button>
 					</div>
 				</div>
-				<div class="wmwp-search__results" data-wmwp="results" aria-busy="false"></div>
+				<div class="wmwp-search__results" data-wmwp="results" aria-busy="false"><?php echo $wmwp['initial_html'] ?? ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- card costruite con DOMDocument da wmwp_grid_card_html() ?></div>
 				<div class="wmwp-search__map" data-wmwp="map-view" hidden>
 					<div class="wmwp-search__map-canvas" role="region" aria-label="<?php echo esc_attr__( 'Map of the results', 'wp-package' ); ?>" data-wmwp="map"></div>
 					<p class="wmwp-search__map-note" data-wmwp="map-note"></p>
 				</div>
-				<nav class="wmwp-search__pager" data-wmwp="pager" aria-label="<?php echo esc_attr__( 'Result pages', 'wp-package' ); ?>" hidden></nav>
+				<nav class="wmwp-search__pager" data-wmwp="pager" aria-label="<?php echo esc_attr__( 'Result pages', 'wp-package' ); ?>"<?php echo empty( $wmwp['initial_pager'] ) ? ' hidden' : ''; ?>><?php echo $wmwp['initial_pager'] ?? ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- link costruiti con esc_url() in wmwp_grid_pager_html() ?></nav>
 				<?php
 				// Barra della selezione (tavola 2 del wireframe di oc:8952, `.selbar2`), in fondo mentre si scorre: compare
 				// con almeno un risultato scelto. Il nome della regione lo scrive il JS dalla source.

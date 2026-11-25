@@ -335,6 +335,7 @@ function wmwp_detail_fetch_items(): ?array {
 	}
 
 	wmwp_poi_search_pending( null, true );
+	wmwp_tracks_copy_pending( null, true );
 	$tracks = wmwp_detail_get_json( add_query_arg( 'app', wmwp_app_param(), $elastic ), WMWP_DETAIL_LIST_TIMEOUT );
 	$pois   = wmwp_detail_get_json( $origin . '/api/v2/app/' . $app . '/pois.geojson', WMWP_DETAIL_LIST_TIMEOUT );
 	// Una risposta di Elasticsearch scaduta o con shard falliti è parziale anche se lo stato è 200
@@ -350,6 +351,8 @@ function wmwp_detail_fetch_items(): ?array {
 	if ( isset( $hits['hits'] ) && is_array( $hits['hits'] ) ) {
 		$hits = $hits['hits'];
 	}
+	// Copia delle tracce per le griglie (oc:9003): stesso download, stessa regola di scrittura dei POI
+	wmwp_tracks_copy_pending( (array) $hits );
 	foreach ( (array) $hits as $hit ) {
 		$hit  = isset( $hit['_source'] ) && is_array( $hit['_source'] ) ? $hit['_source'] : $hit;
 		$id   = (int) ( $hit['id'] ?? 0 );
@@ -712,6 +715,7 @@ function wmwp_detail_index_rebuild( ?array $guard, string $config ): ?array {
 	set_transient( WMWP_DETAIL_INDEX_KEY, $index, WMWP_DETAIL_INDEX_TTL );
 	update_option( WMWP_DETAIL_INDEX_LAST, $index, false );
 	wmwp_poi_search_commit();
+	wmwp_tracks_copy_commit();
 	// Solo con un indice accettato lo storico cambia: righe con l'id dimenticate, primo giro, percorsi nuovi (si
 	// scrivono solo le righe che cambiano). L'option del primo giro si toglie solo se la scrittura è riuscita
 	foreach ( $renumbered as $type ) {
