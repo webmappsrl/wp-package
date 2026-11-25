@@ -36,7 +36,10 @@
     var args = Array.prototype.slice.call(arguments, 1);
     return i18n.sprintf ? i18n.sprintf.apply(null, [format].concat(args)) : format.replace('%s', args[0]);
   };
+  var _n = i18n._n || function (single, plural, number) { return number === 1 ? single : plural; };
   var DEBOUNCE_MS = 400;
+  // Uno slider applica il filtro quando il valore si ferma: da tastiera ogni freccia è un `change` (oc:9003)
+  var SLIDER_SETTLE_MS = 600;
   var SOFT_LIMIT = 5;
   var OVERVIEW_LIMIT = 40;
   // Tempo massimo di una source, poi va in errore: un'API lenta non tiene la pagina in attesa per sempre
@@ -163,7 +166,9 @@
   // --- indirizzo -------------------------------------------------------------------------------------
 
   function writeUrl(push) {
-    var url = window.location.pathname + L.stateToSearch(state, config.params, facetKeys) + window.location.hash;
+    // Modalità griglia (oc:9003): una source sola, il tab non va nell'indirizzo
+    var written = config.grid ? Object.assign({}, state, { tab: '' }) : state;
+    var url = window.location.pathname + L.stateToSearch(written, config.params, facetKeys) + window.location.hash;
     if (push) {
       window.history.pushState(null, '', url);
     } else {
@@ -176,6 +181,22 @@
     if (state.tab && !sourceBySlug(state.tab)) {
       state.tab = '';
     }
+    if (config.grid) {
+      state.tab = (activeSources()[0] || {}).slug || '';
+    }
+    // Slider: valore in ordine, e un valore malformato non è un filtro attivo (oc:9003)
+    activeSources().forEach(function (source) {
+      (source.facets || []).forEach(function (facet) {
+        if (facet.type === 'slider' && state.filters[facet.key]) {
+          var value = L.sliderValue(facet, state.filters[facet.key][0]);
+          if (value) {
+            state.filters[facet.key] = [value];
+          } else {
+            delete state.filters[facet.key];
+          }
+        }
+      });
+    });
     dom.input.value = state.text;
   }
 
@@ -261,6 +282,13 @@
   function setBusy(busy) {
     dom.results.setAttribute('aria-busy', busy ? 'true' : 'false');
     dom.root.classList.toggle('is-loading', busy);
+    // Il focus va ai risultati solo alla fine della run che lo ha chiesto: una run interrotta da un'altra (un filtro
+    // cambiato mentre la pagina arriva) non lo sposta più
+    if (!busy && focusAfterRun && focusAfterRun === controller) {
+      focusAfterRun = null;
+      // Al frame dopo: lo screen reader deve vedere aria-busy già false, se no annuncia i risultati «occupati»
+      window.requestAnimationFrame(function () { window.requestAnimationFrame(focusResults); });
+    }
   }
 
   // Ogni source parte subito e per conto suo: il tab aperto non aspetta i numeri degli altri tab, e il tab
@@ -278,10 +306,13 @@
     var remaining = list.length;
     var sections = null;
     setBusy(true);
-    renderTabs(groups);
+    if (!config.grid) {
+      renderTabs(groups);
+    }
     renderChrome(active);
 
-    list.forEach(function (source) {
+    // In modalità griglia non ci sono tab né il riepilogo «Tutti»: solo la ricerca della source
+    (config.grid ? [] : list).forEach(function (source) {
       overviewFor(source, text, signal).then(function (group) {
         if (signal.aborted) {
           return;
@@ -1016,12 +1047,199 @@
     syncSelection();
   }
 
+  // --- slider (oc:9003) --------------------------------------------------------------------------------
+  // Faccetta `type: slider` di MAP.filters: due input range nativi (minimo e massimo), come wm-core nelle app. Estremi
+  // aperti: un cursore al suo estremo non pone limiti da quel lato (L.sliderBounds). Il valore va nell'indirizzo come
+  // «<min>-<max>», con un lato vuoto se aperto. Si applica quando il valore si ferma (SLIDER_SETTLE_MS): una voce di
+  // cronologia e un annuncio del numero dei risultati, non uno per ogni passo.
+
+  // Valore leggibile: «5 km», «1 h 30 min»; per lo screen reader i minuti diventano «1 ora e 30 minuti»
+  function unitText(view, number, spoken) {
+    if (view.units === 'min') {
+      if (!spoken) {
+        // «15 h», non «15 h 0 min» (la card dice «15 h 0 min» come wp-geohub: lì resta)
+        return number >= 60 && number % 60 === 0 ? (number / 60) + ' h' : L.formatDuration(number, config.lang);
+      }
+      var hours = Math.floor(number / 60);
+      var minutes = Math.round(number % 60);
+      /* translators: %s: number of hours */
+      var h = hours ? sprintf(_n('%s hour', '%s hours', hours, 'wp-package'), formatNumber(hours)) : '';
+      /* translators: %s: number of minutes */
+      var m = minutes || !hours ? sprintf(_n('%s minute', '%s minutes', minutes, 'wp-package'), formatNumber(minutes)) : '';
+      /* translators: 1: hours, 2: minutes (e.g. 1 hour and 30 minutes) */
+      return h && m ? sprintf(__('%1$s and %2$s', 'wp-package'), h, m) : h || m;
+    }
+    return formatNumber(number) + (view.units ? ' ' + view.units : '');
+  }
+
+  // Testo del filtro attivo: «fino a 10 km», «da 4 km», «da 4 a 10 km»
+  function sliderText(view, value) {
+    var bounds = L.sliderBounds(view, value);
+    if (bounds.min !== null && bounds.max !== null) {
+      /* translators: 1: lower value, 2: upper value (e.g. 4 km, 10 km) */
+      return sprintf(__('from %1$s to %2$s', 'wp-package'), unitText(view, bounds.min), unitText(view, bounds.max));
+    }
+    if (bounds.max !== null) {
+      /* translators: %s: upper value (e.g. 10 km) */
+      return sprintf(__('up to %s', 'wp-package'), unitText(view, bounds.max));
+    }
+    if (bounds.min !== null) {
+      /* translators: %s: lower value (e.g. 4 km) */
+      return sprintf(__('from %s', 'wp-package'), unitText(view, bounds.min));
+    }
+    return value;
+  }
+
+  var sliderTimers = {};
+
+  function renderSlider(view, facet) {
+    // Senza percorsi con il valore lo slider non c'è (oc:9003), a meno che l'indirizzo non abbia già un suo filtro
+    if (view.disabled || (!view.available && !view.value)) {
+      return;
+    }
+    var top = L.lastStep(view);
+    var bounds = L.sliderBounds(view, view.value);
+    var fieldset = document.createElement('fieldset');
+    fieldset.className = 'wmwp-facet wmwp-facet--slider';
+    var legend = document.createElement('legend');
+    legend.className = 'wmwp-facet__title';
+    legend.textContent = view.label || facet.label || view.key;
+    var legendLang = L.langFor(facet.label_lang, config.lang);
+    if (legendLang) {
+      legend.setAttribute('lang', legendLang);
+    }
+    fieldset.appendChild(legend);
+    var box = document.createElement('div');
+    box.className = 'wmwp-slider';
+    var idBase = 'wmwp-slider-' + String(view.key).replace(/[^A-Za-z0-9_-]/g, '-');
+    // Si apre e chiude dal titolo come gli altri filtri (config.collapsible_facets): aperto se ha un valore
+    if (config.collapsible_facets) {
+      var open = Object.prototype.hasOwnProperty.call(openFacets, view.key) ? openFacets[view.key] : !!view.value;
+      box.id = idBase;
+      box.hidden = !open;
+      fieldset.classList.toggle('is-open', open);
+      var title = legend.textContent;
+      legend.textContent = '';
+      var opener = document.createElement('button');
+      opener.type = 'button';
+      opener.className = 'wmwp-facet__toggle';
+      opener.dataset.key = view.key;
+      opener.setAttribute('aria-expanded', open ? 'true' : 'false');
+      opener.setAttribute('aria-controls', box.id);
+      var titleText = document.createElement('span');
+      titleText.className = 'wmwp-facet__title-text';
+      titleText.textContent = title;
+      var chevron = document.createElement('span');
+      chevron.className = 'wmwp-facet__chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      opener.appendChild(titleText);
+      opener.appendChild(chevron);
+      opener.addEventListener('click', function () {
+        openFacets[view.key] = !open;
+        open = !open;
+        box.hidden = !open;
+        fieldset.classList.toggle('is-open', open);
+        opener.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      legend.appendChild(opener);
+    }
+    var make = function (which, value) {
+      var row = document.createElement('div');
+      row.className = 'wmwp-slider__row';
+      var label = document.createElement('label');
+      label.className = 'wmwp-slider__label';
+      label.htmlFor = idBase + '-' + which;
+      label.textContent = which === 'min' ? __('Minimum', 'wp-package') : __('Maximum', 'wp-package');
+      var input = document.createElement('input');
+      input.type = 'range';
+      input.id = idBase + '-' + which;
+      input.className = 'wmwp-slider__input';
+      input.min = String(view.min);
+      input.max = String(top);
+      input.step = String(view.step);
+      input.value = String(value);
+      var output = document.createElement('span');
+      output.className = 'wmwp-slider__value';
+      output.setAttribute('aria-hidden', 'true');
+      row.appendChild(label);
+      row.appendChild(input);
+      row.appendChild(output);
+      box.appendChild(row);
+      return { input: input, output: output };
+    };
+    var low = make('min', bounds.min === null ? view.min : bounds.min);
+    var high = make('max', bounds.max === null ? top : bounds.max);
+    // Un cursore al suo estremo non pone limiti: lo dice anche il testo («28 km+», «nessun massimo»)
+    var sync = function () {
+      var a = Number(low.input.value);
+      var b = Number(high.input.value);
+      low.output.textContent = unitText(view, a);
+      low.input.setAttribute('aria-valuetext', a > Number(view.min) ? unitText(view, a, true) : __('No minimum', 'wp-package'));
+      high.output.textContent = unitText(view, b) + (b < top ? '' : '+');
+      high.input.setAttribute('aria-valuetext', b < top ? unitText(view, b, true) : __('No maximum', 'wp-package'));
+      // Riempimento del binario fino al cursore, per i browser senza ::-moz-range-progress (il tema lo usa con --wmwp-fill)
+      [low, high].forEach(function (part) {
+        var span = top - Number(view.min);
+        var fill = span > 0 ? (Number(part.input.value) - Number(view.min)) / span * 100 : 0;
+        part.input.style.setProperty('--wmwp-fill', fill + '%');
+      });
+    };
+    var apply = function () {
+      var a = Number(low.input.value);
+      var b = Number(high.input.value);
+      var value = (a > Number(view.min) ? String(a) : '') + '-' + (b < top ? String(b) : '');
+      typingEntry = false;
+      if (value === '-') {
+        delete state.filters[view.key];
+      } else {
+        state.filters[view.key] = [value];
+      }
+      state.page = 1;
+      writeUrl(true);
+      run();
+    };
+    [low, high].forEach(function (part) {
+      part.input.addEventListener('input', function () {
+        // I due cursori non si incrociano: chi si muove spinge l'altro
+        if (Number(low.input.value) > Number(high.input.value)) {
+          (part === low ? high : low).input.value = part.input.value;
+        }
+        sync();
+      });
+      part.input.addEventListener('change', function () {
+        clearTimeout(sliderTimers[view.key]);
+        sliderTimers[view.key] = setTimeout(function () {
+          // Il focus torna su chi lo ha adesso, non sul cursore mosso: l'utente può essere passato all'altro cursore
+          // o a un altro filtro durante l'attesa
+          var current = document.activeElement;
+          if (current && dom.facets.contains(current)) {
+            if (current.id) {
+              focusSlider = current.id;
+            } else if (current.name && current.type === 'checkbox') {
+              focusFacet = { key: current.name, id: current.value };
+            }
+          }
+          apply();
+        }, SLIDER_SETTLE_MS);
+      });
+    });
+    sync();
+    fieldset.appendChild(box);
+    dom.facets.appendChild(fieldset);
+  }
+
+  var focusSlider = null;
+
   function renderFacets(source, views) {
     dom.facets.textContent = '';
     var configs = {};
     (source.facets || []).forEach(function (facet) { configs[facet.key] = facet; });
     views.forEach(function (view) {
       var facet = configs[view.key] || {};
+      if (view.type === 'slider') {
+        renderSlider(view, facet);
+        return;
+      }
       var fieldset = document.createElement('fieldset');
       fieldset.className = 'wmwp-facet' + (view.disabled ? ' is-disabled' : '');
       var legend = document.createElement('legend');
@@ -1149,6 +1367,13 @@
       }
       dom.facets.appendChild(fieldset);
     });
+    if (focusSlider) {
+      var sliderInput = document.getElementById(focusSlider);
+      focusSlider = null;
+      if (sliderInput) {
+        sliderInput.focus();
+      }
+    }
     if (focusFacet) {
       var target = Array.prototype.find.call(dom.facets.querySelectorAll('input'), function (input) {
         return input.name === focusFacet.key && input.value === focusFacet.id;
@@ -1201,8 +1426,9 @@
     (source ? source.facets || [] : []).forEach(function (facet) {
       var view = views.find(function (item) { return item.key === facet.key; });
       (state.filters[facet.key] || []).forEach(function (id) {
-        var value = view && view.values.find(function (item) { return item.id === id; });
-        chosen.push({ key: facet.key, id: id, facet: (view && view.label) || facet.label || facet.key, label: value ? value.label : id });
+        var value = view && view.values ? view.values.find(function (item) { return item.id === id; }) : null;
+        var label = value ? value.label : (view && view.type === 'slider' ? sliderText(view, id) : id);
+        chosen.push({ key: facet.key, id: id, facet: (view && view.label) || facet.label || facet.key, label: label });
       });
     });
     dom.active.hidden = !chosen.length;
@@ -1210,7 +1436,7 @@
     if (!chosen.length) {
       if (focusChip !== null) {
         focusChip = null;
-        dom.input.focus();
+        focusStart();
       }
       return;
     }
@@ -1284,6 +1510,11 @@
     dom.results.scrollIntoView({ block: 'start' });
   }
 
+  // Il focus va ai risultati quando quelli nuovi sono disegnati, non al clic: con una source sul server (rotta REST)
+  // lo screen reader leggeva la pagina di prima, «occupata» (oc:9003, prova con VoiceOver). È il controller della run
+  // che lo ha chiesto
+  var focusAfterRun = null;
+
   // Cambiando tab i filtri si tolgono: valgono per la source del tab in cui si sono scelti («Validazione» c'è solo per
   // i percorsi), e così «Vedi tutti: 37 percorsi» apre davvero 37 percorsi. «Indietro» ritrova la ricerca filtrata
   // (Rubens, 10/11, review interna di wp-package, punto 13a)
@@ -1302,7 +1533,7 @@
     state.page = page;
     writeUrl(true);
     run();
-    focusResults();
+    focusAfterRun = controller;
   }
 
   function toggleFilter(key, id, on) {
@@ -1321,6 +1552,16 @@
     run();
   }
 
+  // Dove va il focus quando sparisce l'elemento che lo aveva (filtri tolti): il campo di testo, o i risultati se il
+  // campo è nascosto (oc:9003: il focus finiva sul body)
+  function focusStart() {
+    if (dom.form.hidden) {
+      focusAfterRun = controller;
+    } else {
+      dom.input.focus();
+    }
+  }
+
   function clearFilters() {
     typingEntry = false;
     var active = sourceBySlug(state.tab);
@@ -1328,7 +1569,7 @@
     state.page = 1;
     writeUrl(true);
     run();
-    dom.input.focus();
+    focusStart();
   }
 
   // Testo cercato. Quello che si scrive di seguito è un passo della cronologia: la prima pausa crea il passo

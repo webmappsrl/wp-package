@@ -34,9 +34,10 @@ $wmwp_sandbox_index = [
 	'transient' => get_transient( 'wmwp_detail_index' ),
 	'options'   => [],
 ];
-// Con l'indice si riscrive anche la copia dei POI per la ricerca (oc:9000): va rimessa com'era
+// Con l'indice si riscrivono anche la copia dei POI per la ricerca (oc:9000) e quella delle tracce per le griglie
+// (oc:9003): vanno rimesse com'erano
 // Anche gli indirizzi vecchi passati e falliti e le aree dei POI (oc:9018), che una ricostruzione del test riscrive
-foreach ( [ 'wmwp_detail_index_last', 'wmwp_detail_index_rebuilt_at', 'wmwp_detail_bases', 'wmwp_detail_index_rejects', 'wmwp_poi_search_copy', 'wmwp_detail_legacy_done', 'wmwp_detail_legacy_failed', 'wmwp_poi_layers_v1' ] as $wmwp_sandbox_option ) {
+foreach ( [ 'wmwp_detail_index_last', 'wmwp_detail_index_rebuilt_at', 'wmwp_detail_bases', 'wmwp_detail_index_rejects', 'wmwp_poi_search_copy', 'wmwp_tracks_copy', 'wmwp_detail_legacy_done', 'wmwp_detail_legacy_failed', 'wmwp_poi_layers_v1' ] as $wmwp_sandbox_option ) {
 	$wmwp_sandbox_index['options'][ $wmwp_sandbox_option ] = get_option( $wmwp_sandbox_option, null );
 }
 

@@ -218,7 +218,11 @@ function wmwp_asset_version( string $file ): string {
 }
 
 /** Registra e accoda gli script della ricerca, con la configurazione per il JS. */
-function wmwp_enqueue_search_assets( array $sources, array $params ): void {
+/**
+ * @param array<string, mixed> $extra Chiavi in più per la configurazione del JS (modalità griglia, risultato iniziale:
+ *                                    includes/grid.php, oc:9003).
+ */
+function wmwp_enqueue_search_assets( array $sources, array $params, array $extra = [] ): void {
 	$args = [ 'in_footer' => true ];
 	wp_register_script( 'wmwp-search-logic', WMWP_URL . 'assets/js/search-logic.js', [], wmwp_asset_version( 'assets/js/search-logic.js' ), $args );
 	wp_register_script( 'wmwp-search', WMWP_URL . 'assets/js/search.js', [ 'wmwp-search-logic', 'wp-i18n' ], wmwp_asset_version( 'assets/js/search.js' ), $args );
@@ -226,6 +230,7 @@ function wmwp_enqueue_search_assets( array $sources, array $params ): void {
 	wp_register_script( 'wmwp-source-tracks', WMWP_URL . 'assets/js/source-tracks.js', [ 'wmwp-search', 'wmwp-track-export', 'wmwp-track-api', 'wmwp-track-map' ], wmwp_asset_version( 'assets/js/source-tracks.js' ), $args );
 
 	wp_register_script( 'wmwp-source-pois', WMWP_URL . 'assets/js/source-pois.js', [ 'wmwp-search' ], wmwp_asset_version( 'assets/js/source-pois.js' ), $args );
+	wp_register_script( 'wmwp-source-grid-tracks', WMWP_URL . 'assets/js/source-grid-tracks.js', [ 'wmwp-search' ], wmwp_asset_version( 'assets/js/source-grid-tracks.js' ), $args );
 
 	$config = [
 		'params'  => $params,
@@ -242,6 +247,7 @@ function wmwp_enqueue_search_assets( array $sources, array $params ): void {
 	];
 	wp_set_script_translations( 'wmwp-search', 'wp-package', WMWP_PATH . 'languages' );
 	wp_set_script_translations( 'wmwp-source-tracks', 'wp-package', WMWP_PATH . 'languages' );
+	$config = array_merge( $config, $extra );
 	wp_add_inline_script( 'wmwp-search', 'window.wmWpSearchConfig = ' . wp_json_encode( $config ) . ';', 'before' );
 	wp_enqueue_script( 'wmwp-search' );
 	foreach ( $sources as $source ) {

@@ -231,7 +231,73 @@
       .map(function (item) { return item.hit; });
   }
 
+  // --- Faccette slider (oc:9003): `{type: 'slider', key, field, min, max, step, units, label}` da MAP.filters ----------
+
+  // Ultimo valore che un input range con quel passo raggiunge: con min 1, max 30 e passo 3 è 28, non 30.
+  function lastStep(facet) {
+    var min = Number(facet.min);
+    var max = Number(facet.max);
+    var step = Number(facet.step);
+    if (!(step > 0) || !(max > min)) {
+      return max;
+    }
+    return Math.round((min + Math.floor((max - min) / step + 1e-9) * step) * 1e6) / 1e6;
+  }
+
+  // Limiti di uno slider dal valore nell'indirizzo («<min>-<max>»). Estremi aperti: un lato vuoto, al minimo o
+  // all'ultimo passo non pone limiti da quel lato; un valore malformato non pone limiti.
+  function sliderBounds(facet, value) {
+    var open = { min: null, max: null };
+    var match = /^\s*(\d+(?:[.,]\d+)?)?\s*-\s*(\d+(?:[.,]\d+)?)?\s*$/.exec(String(value || ''));
+    if (!match) {
+      return open;
+    }
+    var number = function (raw) { return raw === undefined ? null : Number(String(raw).replace(',', '.')); };
+    var low = number(match[1]);
+    var high = number(match[2]);
+    // Un intervallo rovesciato scritto a mano («10-4») vale in ordine
+    if (low !== null && high !== null && low > high) {
+      var swap = low;
+      low = high;
+      high = swap;
+    }
+    return {
+      min: low !== null && low > Number(facet.min) ? low : null,
+      max: high !== null && high < lastStep(facet) ? high : null
+    };
+  }
+
+  // Valore di uno slider dai suoi limiti: «<min>-<max>» con un lato vuoto se aperto, '' senza limiti (un valore malformato
+  // non è un filtro attivo). Come wmwp_grid_slider_value() di includes/grid.php
+  function sliderValue(facet, value) {
+    var bounds = sliderBounds(facet, value);
+    if (bounds.min === null && bounds.max === null) {
+      return '';
+    }
+    return (bounds.min === null ? '' : String(bounds.min)) + '-' + (bounds.max === null ? '' : String(bounds.max));
+  }
+
+  // Un percorso senza valore (0 nell'indice) non passa un filtro attivo; senza limiti passa sempre.
+  function matchesSlider(hit, facet, chosen) {
+    var bounds = sliderBounds(facet, chosen && chosen.length ? chosen[0] : '');
+    if (bounds.min === null && bounds.max === null) {
+      return true;
+    }
+    var value = Number(fieldValue(hit, facet.field));
+    if (!(value > 0)) {
+      return false;
+    }
+    return (bounds.min === null || value >= bounds.min) && (bounds.max === null || value <= bounds.max);
+  }
+
+  function hasSliderValue(hit, facet) {
+    return Number(fieldValue(hit, facet.field)) > 0;
+  }
+
   function matchesFacet(hit, facet, chosen, lang) {
+    if (facet.type === 'slider') {
+      return matchesSlider(hit, facet, chosen);
+    }
     if (!chosen || !chosen.length) {
       return true;
     }
@@ -254,6 +320,23 @@
     selected = selected || {};
     return facets.map(function (facet) {
       var chosen = selected[facet.key] || [];
+      if (facet.type === 'slider') {
+        // Uno slider si mostra solo se qualche percorso, con gli altri filtri, ha il valore (oc:9003)
+        return {
+          key: facet.key,
+          label: facet.label,
+          type: 'slider',
+          disabled: !!facet.disabled,
+          min: facet.min,
+          max: facet.max,
+          step: facet.step,
+          units: facet.units,
+          value: chosen.length ? sliderValue(facet, chosen[0]) : '',
+          available: !facet.disabled && filterHits(hits, facets, selected, lang, facet.key).some(function (hit) {
+            return hasSliderValue(hit, facet);
+          })
+        };
+      }
       var view = { key: facet.key, label: facet.label, disabled: !!facet.disabled, values: [] };
       if (facet.disabled) {
         return view;
@@ -470,6 +553,9 @@
     measuredSum: measuredSum,
     countLabel: countLabel,
     langFor: langFor,
-    fieldValue: fieldValue
+    fieldValue: fieldValue,
+    lastStep: lastStep,
+    sliderBounds: sliderBounds,
+    sliderValue: sliderValue
   };
 });

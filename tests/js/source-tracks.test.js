@@ -159,3 +159,15 @@ test('meta_last_field mette all\'inizio della riga l\'ultimo valore del campo', 
   assert.equal(result.items.find((item) => item.id === 473).meta[0], 'Bottidda');
   assert.equal(result.items.find((item) => item.id === 250).meta[0], '');
 });
+
+// Slider di MAP.filters nella ricerca unica (oc:9003): stesse regole di filterHits (estremi aperti)
+test('uno slider filtra i percorsi e dice se è disponibile', async () => {
+  const slider = { key: 'track_distance', type: 'slider', field: 'distance', min: 1, max: 30, step: 3, units: 'km', label: 'Lunghezza' };
+  const { impl } = load({ source: { facets: [slider] } });
+  const result = await impl.search(query({ filters: { track_distance: ['-4'] } }));
+  assert.deepEqual(result.ids, ['473']);
+  const view = result.facets.find((facet) => facet.key === 'track_distance');
+  assert.equal(view.type, 'slider');
+  assert.equal(view.available, true);
+  assert.equal(view.value, '-4');
+});
