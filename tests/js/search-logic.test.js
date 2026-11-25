@@ -59,7 +59,8 @@ test('facetValues su un percorso senza il campo restituisce un elenco vuoto', ()
 
 test('facetValues in inglese ripiega sul nome italiano', () => {
   const hit = hits.find((h) => h.id === 80);
-  assert.deepEqual(L.facetValues(hit, DIFFICULTY, 'en'), [{ id: 'sardegnasentieri:tid:4066', label: 'T' }]);
+  // oc:9018: il nome che ripiega sull'italiano porta lang it
+  assert.deepEqual(L.facetValues(hit, DIFFICULTY, 'en'), [{ id: 'sardegnasentieri:tid:4066', label: 'T', lang: 'it' }]);
 });
 
 test('filterHits: OR dentro un filtro, AND fra filtri', () => {
@@ -311,4 +312,97 @@ test('rankByText senza testo: alfabetico sul nome italiano senza spazi iniziali,
   // A parità di nome resta l'ordine dell'API (9 prima di 8)
   const tie = [{ id: 9, name: { it: 'Bau' } }, { id: 7, name: { it: 'Abba' } }, { id: 8, name: { it: 'Bau' } }];
   assert.deepEqual(L.rankByText(tie, '', 'it').map((hit) => hit.id), [7, 9, 8]);
+});
+
+// oc:9018: faccette dal config.json (from_config). Solo le opzioni pubblicate (`include`), con il nome e la lingua del
+// nome di MAP.filters; le opzioni a zero non si mostrano, quelle scelte sì
+test('computeFacets con una faccetta dal config.json: solo le opzioni pubblicate, nome e lingua dal config', () => {
+  const facet = {
+    key: 'activity', type: 'list', field: 'taxonomyActivities',
+    include: ['hiking', 'horse'], order: ['horse', 'hiking'],
+    labels: { hiking: 'Alte vie', horse: 'Turismo equestre' }, lang_labels: { hiking: 'it' }
+  };
+  const view = L.computeFacets(hits, [facet], {}, 'en')[0];
+  assert.deepEqual(view.values.map((v) => v.id), ['horse', 'hiking']);
+  assert.equal(view.values.find((v) => v.id === 'hiking').lang, 'it');
+  assert.equal(view.values.find((v) => v.id === 'horse').lang, undefined);
+  assert.ok(!view.values.some((v) => v.id === 'mtb'), 'mtb non è fra le opzioni pubblicate');
+  assert.ok(view.values.every((v) => v.count > 0));
+});
+
+test('computeFacets: un\'opzione scelta resta anche a zero, le altre a zero no', () => {
+  const facet = { key: 'activity', type: 'list', field: 'taxonomyActivities', include: ['hiking', 'nordic-walking'], labels: { 'nordic-walking': 'Nordic' } };
+  const view = L.computeFacets(hits, [facet], { activity: ['nordic-walking'] }, 'it')[0];
+  const chosen = view.values.find((v) => v.id === 'nordic-walking');
+  assert.ok(chosen && chosen.selected && chosen.count === 0);
+  assert.equal(chosen.label, 'Nordic');
+});
+
+test('computeFacets: una famiglia senza percorsi ha values vuoti (la ricerca non la disegna)', () => {
+  const facet = { key: 'ebike-difficulty', type: 'terms', field: 'terms.ebike-difficulty' };
+  assert.deepEqual(L.computeFacets(hits, [facet], {}, 'it')[0].values, []);
+});
+
+// oc:9018: un valore che non sta in nessun gruppo del tema (uno stato nuovo creato in Nova) si mostra con il nome dello
+// shard, dopo i gruppi, invece di sparire
+test('groupValues tiene i valori fuori gruppo, dopo i gruppi', () => {
+  const facet = {
+    key: 'walkability', type: 'terms', field: 'terms.walkability-status',
+    groups: [{ id: 'walkability-status-walkable', label: 'Percorribile', values: ['walkability-status-walkable'] }]
+  };
+  const hit = { terms: { 'walkability-status': [{ identifier: 'walkability-status-closed', name: { it: 'Chiuso' } }] } };
+  assert.deepEqual(L.facetValues(hit, facet, 'it'), [{ id: 'walkability-status-closed', label: 'Chiuso' }]);
+});
+
+// oc:9018: filtri di luogo dagli overlay in un solo parametro `layer`, come le app (?layer=<id>). Ogni faccetta prende
+// dal parametro gli id delle sue aree; un id che non è di nessuna si ignora
+const AREAS = [
+  { key: 'area-1', param: 'layer', ids: ['3', '4'], type: 'list', field: 'layers' },
+  { key: 'area-2', param: 'layer', ids: ['50'], type: 'list', field: 'layers' }
+];
+
+test('parseState divide il parametro condiviso fra le faccette, ignorando gli id sconosciuti', () => {
+  const state = L.parseState('?layer=3,50,999&activity=hiking', PARAMS, AREAS.concat(['activity']));
+  assert.deepEqual(state.filters, { 'area-1': ['3'], 'area-2': ['50'], activity: ['hiking'] });
+});
+
+test('stateToSearch unisce le faccette con lo stesso parametro in un valore solo, in ordine numerico', () => {
+  const search = L.stateToSearch({ text: '', tab: '', page: 1, filters: { 'area-2': ['50'], 'area-1': ['4', '3'] } }, PARAMS, AREAS);
+  assert.equal(decodeURIComponent(search), '?layer=3,4,50');
+});
+
+test('filterHits sulle aree: OR dentro la faccetta, AND fra le faccette', () => {
+  const hit = { layers: [3, 11] };
+  assert.equal(L.filterHits([hit], AREAS, { 'area-1': ['3', '4'] }, 'it').length, 1);
+  assert.equal(L.filterHits([hit], AREAS, { 'area-1': ['3'], 'area-2': ['50'] }, 'it').length, 0);
+});
+
+// oc:9018: un termine senza il nome nella lingua della pagina mostra quello italiano, marcato con lang (WCAG 3.1.2)
+test('facetValues su un termine: nome italiano sulla pagina inglese con lang it', () => {
+  const facet = { key: 'validation', type: 'terms', field: 'terms.validation-status' };
+  const hit = { terms: { 'validation-status': [{ identifier: 'validation-status-validated', name: { it: 'Validato' } }] } };
+  assert.deepEqual(L.facetValues(hit, facet, 'en'), [{ id: 'validation-status-validated', label: 'Validato', lang: 'it' }]);
+  const both = { terms: { 'validation-status': [{ identifier: 'validation-status-validated', name: { it: 'Validato', en: 'Validated' } }] } };
+  assert.deepEqual(L.facetValues(both, facet, 'en'), [{ id: 'validation-status-validated', label: 'Validated' }]);
+});
+
+// Review interna di oc:9018 (B1): un valore scelto che con gli altri filtri scende a 0 risultati resta con il suo nome,
+// preso dai percorsi che lo hanno, anche in una faccetta di termini senza `labels` né `groups` (scale di difficoltà,
+// percorribilità), e con la lingua del nome
+test('computeFacets: valore scelto a 0 con il nome dei percorsi, non l\'identifier', () => {
+  const tracce = [
+    { id: 1, layers: [3], terms: { 'hiking-difficulty': [{ identifier: 'hiking-difficulty-easy', name: { it: 'Facile' } }], 'walkability-status': [{ identifier: 'walkability-status-walkable', name: { it: 'Percorribile', en: 'Walkable' } }] } },
+    { id: 2, layers: [4], terms: { 'hiking-difficulty': [{ identifier: 'hiking-difficulty-hard', name: { it: 'Difficile' } }] } },
+  ];
+  const scala = { key: 'hiking-difficulty', label: 'Difficoltà', type: 'terms', field: 'terms.hiking-difficulty' };
+  const stato = { key: 'walkability', label: 'Percorribilità', type: 'terms', field: 'terms.walkability-status', missing: 'walkability-status-unknown', labels: { 'walkability-status-unknown': 'Sconosciuta' } };
+  const area = { key: 'area-3', label: 'Aree', type: 'list', field: 'layers' };
+  const [difficolta, percorribilita] = L.computeFacets(tracce, [scala, stato, area], { 'hiking-difficulty': ['hiking-difficulty-easy'], walkability: ['walkability-status-walkable'], 'area-3': ['4'] }, 'en');
+  const facile = difficolta.values.find((v) => v.id === 'hiking-difficulty-easy');
+  assert.deepEqual(facile, { id: 'hiking-difficulty-easy', label: 'Facile', count: 0, selected: true, lang: 'it' });
+  const percorribile = percorribilita.values.find((v) => v.id === 'walkability-status-walkable');
+  assert.deepEqual(percorribile, { id: 'walkability-status-walkable', label: 'Walkable', count: 0, selected: true });
+  // Un valore scelto che nessun percorso ha (indirizzo scritto a mano): resta l'identifier
+  const [solo] = L.computeFacets(tracce, [scala], { 'hiking-difficulty': ['hiking-difficulty-xx'] }, 'it');
+  assert.equal(solo.values.find((v) => v.id === 'hiking-difficulty-xx').label, 'hiking-difficulty-xx');
 });

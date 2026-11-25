@@ -173,3 +173,22 @@ test('detail: anello (fine entro 50 m dall\'inizio) → solo la partenza; senza 
   assert.deepEqual(out.features.filter((f) => f.properties.endpoint).map((f) => f.properties.endpoint), ['start']);
   assert.equal(M.detail([anello], { tracks: [{ id: 7 }] }).features.filter((f) => f.properties.endpoint).length, 0);
 });
+
+// oc:9018: lo strokeColor del percorso, se non è vuoto, vince sul colore del layer (come le app); vuoto ('', come
+// oggi su tutti i percorsi di dev e UAT) vale come assente
+test('collection: strokeColor non vuoto vince, vuoto vale come assente', () => {
+  const colored = (id, layers, strokeColor) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[9, 40], [9.1, 40.1]] }, properties: { id, layers, strokeColor } });
+  const colors = [{ id: 9, color: '#e100ff' }, { id: 11, color: '#de1b0d' }];
+  const out = M.collection([colored(1, [3, 11], ''), colored(2, [3, 9, 11], ''), colored(3, [3, 11], '#123456')], {}, { layerColors: colors });
+  assert.deepEqual(out.features.map((f) => f.properties.strokeColor), ['#de1b0d', '#e100ff', '#123456']);
+});
+
+// oc:9018: l'anello lo dice lo shard (`roundtrip`); la regola dei 50 m resta per uno shard che non lo dà
+test('detail: roundtrip dello shard decide partenza e arrivo', () => {
+  const far = (id, roundtrip) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[9.5, 39.8], [9.52, 39.82], [9.503, 39.8]] }, properties: { id, roundtrip } });
+  const near = (id, roundtrip) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[9.5, 39.8], [9.52, 39.82], [9.5001, 39.8]] }, properties: { id, roundtrip } });
+  const ends = (feature) => M.detail([feature], { tracks: [{ id: feature.properties.id, ends: { start: 'S', end: 'E' } }] }).features.filter((f) => f.properties.endpoint).map((f) => f.properties.endpoint);
+  assert.deepEqual(ends(far(1, true)), ['start'], 'anello per lo shard, fine a 250 m');
+  assert.deepEqual(ends(near(2, false)), ['start', 'end'], 'non anello per lo shard, fine a 8 m');
+  assert.deepEqual(ends(near(3, undefined)), ['start'], 'senza roundtrip: regola dei 50 m');
+});

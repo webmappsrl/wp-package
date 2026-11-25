@@ -58,8 +58,14 @@ $nova = [
 $w = wmwp_walkability( $nova, 'en' );
 $check( '2026-11-17T09:06:46+01:00' === $w['updated_at'], 'Nova: data' );
 $check( 'zone di fango' === $w['note'] && 'it' === $w['note_lang'], 'Nova: nota con la sua lingua' );
-$check( 'Partially walkable' === $w['name'] && 'en' === $w['name_lang'], 'nome dal registro se il termine non ha la lingua' );
+// oc:9018: il registro non ha più i nomi degli stati: un termine senza la lingua della pagina si mostra con il suo
+// nome, marcato con la sua lingua
+$check( 'Parzialmente percorribile' === $w['name'] && 'it' === $w['name_lang'], 'nome del termine nella sua lingua se manca quella della pagina' );
 $check( 3 === $w['level'], 'parzialmente 3' );
+$w = wmwp_walkability( [ 'taxonomies' => $term( 'walkable', [] ) ], 'it' );
+$check( 'walkability-status-walkable' === $w['name'], 'termine senza nome: il suo identifier' );
+$w = wmwp_walkability( [], 'en' );
+$check( 'Unknown' === $w['name'] && 'en' === $w['name_lang'], 'senza stato: «Unknown» dal registro' );
 
 // 3. Senza termine, senza walkability, senza taxonomies; e «Sconosciuta»
 foreach ( [ [], [ 'taxonomies' => [] ], [ 'taxonomies' => $term( 'unknown', [ 'it' => 'Sconosciuta' ] ) ] ] as $i => $props ) {

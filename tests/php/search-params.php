@@ -68,6 +68,8 @@ add_filter(
 			[ 'key' => 'year', 'label' => 'Anno' ],
 			[ 'key' => 'q', 'label' => 'Testo' ],
 			[ 'key' => 'comune', 'label' => 'Comune' ],
+			// Il parametro delle aree degli overlay (oc:9018, review interna): una faccetta con quella chiave collide
+			[ 'key' => 'layer', 'label' => 'Strato' ],
 		];
 		$sources['tracks']['meta_facet'] = 'year';
 		return $sources;
@@ -75,9 +77,9 @@ add_filter(
 );
 $tracks = wmwp_search_sources()['tracks'];
 $keys   = array_column( $tracks['facets'], 'key' );
-$check( [ 'f_year', 'f_q', 'comune' ] === $keys, 'chiavi dei filtri: ' . implode( ',', $keys ) );
+$check( [ 'f_year', 'f_q', 'comune', 'f_layer' ] === $keys, 'chiavi dei filtri: ' . implode( ',', $keys ) );
 $check( 'f_year' === $tracks['meta_facet'], 'il meta_facet segue la chiave rinominata' );
-$check( 2 === $warnings, "due avvisi per le chiavi dei filtri, invece di {$warnings}" );
+$check( 3 === $warnings, "tre avvisi per le chiavi dei filtri, invece di {$warnings}" );
 remove_all_filters( 'wp_package_search_sources' );
 
 if ( $failures ) {

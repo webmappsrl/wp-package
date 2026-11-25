@@ -44,12 +44,17 @@
 
   var impls = {};
   var sources = config.sources || [];
+  // Chiavi dei filtri per l'indirizzo; una faccetta con un parametro condiviso (`param`, oc:9018) entra con `param` e
+  // `ids`, così parseState() e stateToSearch() la leggono e la scrivono in quel parametro
   var facetKeys = [];
+  var seenKeys = {};
   sources.forEach(function (source) {
     (source.facets || []).forEach(function (facet) {
-      if (facetKeys.indexOf(facet.key) === -1) {
-        facetKeys.push(facet.key);
+      if (seenKeys[facet.key]) {
+        return;
       }
+      seenKeys[facet.key] = true;
+      facetKeys.push(facet.param ? { key: facet.key, param: facet.param, ids: facet.ids || [] } : facet.key);
     });
   });
 
@@ -158,7 +163,7 @@
   // --- indirizzo -------------------------------------------------------------------------------------
 
   function writeUrl(push) {
-    var url = window.location.pathname + L.stateToSearch(state, config.params) + window.location.hash;
+    var url = window.location.pathname + L.stateToSearch(state, config.params, facetKeys) + window.location.hash;
     if (push) {
       window.history.pushState(null, '', url);
     } else {
@@ -1022,6 +1027,11 @@
       var legend = document.createElement('legend');
       legend.className = 'wmwp-facet__title';
       legend.textContent = view.label || facet.label || view.key;
+      // Nome della famiglia in un'altra lingua (dal config.json, oc:9018): `lang` (WCAG 3.1.2)
+      var legendLang = L.langFor(facet.label_lang, config.lang);
+      if (legendLang) {
+        legend.setAttribute('lang', legendLang);
+      }
       fieldset.appendChild(legend);
       if (view.disabled) {
         fieldset.disabled = true;

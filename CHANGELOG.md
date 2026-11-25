@@ -3,6 +3,57 @@
 Il formato segue [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le versioni seguono
 [Semantic Versioning](https://semver.org/lang/it/).
 
+## 0.6.0 — 2026-11-24
+
+### Aggiunto
+- `config.json` dell'app scaricato da WP-Cron ogni ora, con richiesta condizionale (`ETag`, `Last-Modified`), in
+  un'option con chiave nuova (`wmwp_app_config_v2`): `wmwp_app_config()` (mai una richiesta nella pagina) e
+  `wmwp_app_config_refresh()`; un JSON senza `MAP` non sostituisce la copia buona; dopo un download fallito, senza
+  copia buona, il giro si riprova dopo 5 minuti (`wmwp_app_config_failed_at`); mappa e ricerca leggono la stessa copia
+  (oc:9018).
+- Filtri della ricerca dal `config.json`, come le app: `from_config` (`activities`, `layers`, `poi_types` di
+  `MAP.filters`: opzioni pubblicate, ordine, nomi e lingua del nome; tipi dei POI senza il prefisso `poi_type_`),
+  `from_families` (un filtro per famiglia di `LABELS.taxonomies` con un suffisso, es. `-difficulty`) e
+  `from_overlays` (un filtro per overlay con aree, oc:9018).
+- Aree degli overlay (`includes/app-overlays.php`): geojson scaricati dal cron con richiesta condizionale, solo le aree
+  con `layer_id` presente in `MAP.layers` (un file senza `layer_id` non si decodifica), `wmwp_point_in_geometry()`,
+  appartenenza dei POI `wmwp_poi_layers()` rifatta quando cambiano le aree o la copia dei POI; i filtri leggono gli id
+  delle aree da un'option piccola (`wmwp_app_overlay_layers_v1`), le geometrie solo il cron; la copia dei POI ha il
+  punto (`point`), e una copia senza si riscrive subito; la rotta `wmwp/v1/pois` accetta `layer[]` (oc:9018).
+- Parametro condiviso delle faccette (`param`, `ids`): tutte le aree in `layer` (fisso, `WMWP_APP_AREA_PARAM`), come le
+  app; `parseState()` e `stateToSearch()` (terzo argomento) lo leggono e lo scrivono (oc:9018).
+- Indirizzi vecchi degli elementi nello storico prima che servano: filtro `wmwp_detail_legacy_paths` (lingua del tema
+  abbinata al codice del sito per prefisso), POI da `pois.geojson` a ogni giro, percorsi dal dettaglio letto una volta
+  e solo nel cron o da WP-CLI (filtro `wmwp_detail_legacy_can_read`; al più 100 letture e 60 s per giro), segnati come
+  passati in `wmwp_detail_legacy_done`; un dettaglio che non si legge si riprova dopo 6 ore (`wmwp_detail_legacy_failed`),
+  uno letto senza indirizzo vecchio al più 3 volte; le chiavi di elementi che non sono più nell'indice si tolgono; righe
+  non attuali che danno 301 alla pagina attuale. Un 404 sotto una base che c'è solo nello storico non forza la ricostruzione
+  dell'indice (oc:9018).
+- `wmwp_detail_print_url( $type, $id, $lang )`: indirizzo della scheda PDF dello shard (`<shard>/print/ec-track/<id>` o
+  `ec-poi`), vuoto se `OPTIONS.ec_pdf_enabled` del `config.json` non è acceso; `lang` solo se l'app ha quella lingua.
+  Per il pulsante «Stampa» dei temi, da marcare `rel="nofollow"` (oc:9018, stampa di oc:8982).
+
+### Cambiato
+- Registro degli stati senza i nomi della percorribilità, che arrivano con i termini dello shard; resta il nome dello
+  stato di assenza «Sconosciuta / Unknown». Un termine senza nome si mostra con il suo identifier (oc:9018).
+- `groupValues()`: un valore che non sta in nessun gruppo si tiene dopo i gruppi, con il suo nome, invece di sparire.
+- Colore della linea: lo `strokeColor` della traccia se non è vuoto, poi il primo layer colorato. Anello della mappa
+  del dettaglio da `roundtrip` della traccia; la regola dei 50 m resta solo senza quel campo (oc:9018).
+- `wmwp_detail_normalize_path()` codifica i caratteri non ASCII come il browser: un indirizzo con `’` e lo stesso
+  codificato sono lo stesso percorso (oc:9018).
+- Faccetta dei tipi dei POI: con `include`, `order`, `labels` della faccetta (es. da `from_config`) solo quei tipi, in
+  quell'ordine e con quei nomi; nome del filtro dalla faccetta (oc:9018).
+- Un'opzione scelta che con gli altri filtri scende a zero risultati tiene il nome (e la lingua) che ha nei risultati
+  che la hanno, invece dell'identifier, anche nei filtri di termini senza `labels` (oc:9018).
+- La disattivazione toglie anche il cron del `config.json` e le aree dei POI; la disinstallazione cancella anche le
+  option della 0.6.0 (oc:9018).
+- `wmwp_poi_search_schedule_rebuild()` diventa `wmwp_detail_schedule_rebuild()` (in `detail-index.php`): pianifica la
+  ricostruzione dell'indice, non solo della copia dei POI (oc:9018).
+
+### Tolto
+- La transient del `config.json` per carta e colori (`wmwp_map_config_*`) e la sua costante
+  `WMWP_MAP_CONFIG_CACHE_PREFIX`: non si legge più (oc:9018).
+
 ## 0.5.0 — 2026-11-18
 
 ### Aggiunto

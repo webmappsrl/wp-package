@@ -3,7 +3,7 @@
 Plugin Name: WP Package
 Plugin URI: https://github.com/webmappsrl/wp-package
 Description: Unified site search and detail pages for Webmapp shards: tracks and POIs from the shard APIs, sources added by the theme.
-Version: 0.5.0
+Version: 0.6.0
 Author: Webmapp
 Author URI: https://webmapp.it
 License: GPL2
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WMWP_VERSION', '0.5.0' );
+define( 'WMWP_VERSION', '0.6.0' );
 define( 'WMWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WMWP_URL', plugin_dir_url( __FILE__ ) );
 
@@ -30,6 +30,9 @@ require_once WMWP_PATH . 'includes/detail-base.php';
 require_once WMWP_PATH . 'includes/detail-route.php';
 require_once WMWP_PATH . 'includes/detail-render.php';
 require_once WMWP_PATH . 'includes/detail-data.php';
+require_once WMWP_PATH . 'includes/app-config.php';
+require_once WMWP_PATH . 'includes/app-filters.php';
+require_once WMWP_PATH . 'includes/app-overlays.php';
 require_once WMWP_PATH . 'includes/status.php';
 require_once WMWP_PATH . 'includes/detail-status.php';
 require_once WMWP_PATH . 'includes/detail-seo.php';
@@ -46,12 +49,15 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	WP_CLI::add_command( 'wmwp detail-paths', 'WMWP_Detail_Paths_Command' );
 }
 
-// Alla disattivazione il plugin toglie il suo evento cron (ricostruzione dell'indice dei dettagli)
+// Alla disattivazione il plugin toglie i suoi eventi cron (indice dei dettagli, config.json dell'app)
 register_deactivation_hook(
 	__FILE__,
 	function () {
 		wp_clear_scheduled_hook( WMWP_DETAIL_CRON_HOOK );
-		// La copia dei POI per la ricerca si rifà al primo rinnovo dell'indice (oc:9000)
+		wp_clear_scheduled_hook( WMWP_APP_CONFIG_CRON_HOOK );
+		// La copia dei POI per la ricerca, e le aree dei POI che ne derivano, si rifanno al primo rinnovo dell'indice
+		// (oc:9000, oc:9018)
 		delete_option( WMWP_POI_SEARCH_OPTION );
+		delete_option( WMWP_POI_LAYERS_OPTION );
 	}
 );
