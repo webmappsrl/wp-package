@@ -82,7 +82,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
   ricava `tiles` e `layer_colors` da `wmwp_app_config()`.
 - [x] **Step 4:** lanciare `tests/php/app-config.php`, `tests/php/map-tiles.php`, `tests/php/map-detail.php`;
   atteso `PASS` su tutti e tre.
-- [ ] **Step 5 (commit del dev):** `feat(oc:9018): config.json dell'app scaricato da WP-Cron con richiesta condizionale`
+- [x] **Step 5 (commit del dev):** `feat(oc:9018): config.json dell'app scaricato da WP-Cron con richiesta condizionale` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 2: faccette da `MAP.filters` e `LABELS.taxonomies`
 
@@ -128,7 +128,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
   `from_families`, e la lascia com'è altrimenti.
 - [x] **Step 5:** lanciare `tests/php/app-filters.php`, `tests/php/search-params.php`,
   `node --test tests/js/*.test.js`; atteso `PASS`.
-- [ ] **Step 6 (commit del dev):** `feat(oc:9018): faccette dai filtri e dalle famiglie del config.json`
+- [x] **Step 6 (commit del dev):** `feat(oc:9018): faccette dai filtri e dalle famiglie del config.json` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 3: registro degli stati senza nomi, valori fuori registro visibili
 
@@ -158,7 +158,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
   nome.
 - [x] **Step 4:** lanciare `tests/php/status.php`, `tests/php/detail-status.php`, `node --test tests/js/*.test.js`;
   atteso `PASS`.
-- [ ] **Step 5 (commit del dev):** `feat(oc:9018): stati con i nomi dello shard e valori fuori registro visibili`
+- [x] **Step 5 (commit del dev):** `feat(oc:9018): stati con i nomi dello shard e valori fuori registro visibili` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 4: aree degli overlay e appartenenza dei POI
 
@@ -198,7 +198,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
 - [x] **Step 4:** lanciare `tests/php/app-overlays.php` e `tests/php/search-pois.php`; atteso `PASS`.
   Poi sul dev: `wp eval 'wmwp_app_config_refresh(); echo count( wmwp_app_overlays("it") );'` → `2`, e
   memoria di picco sotto i 256M (`memory_get_peak_usage`).
-- [ ] **Step 5 (commit del dev):** `feat(oc:9018): aree degli overlay e appartenenza dei POI calcolata sul server`
+- [x] **Step 5 (commit del dev):** `feat(oc:9018): aree degli overlay e appartenenza dei POI calcolata sul server` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 5: filtri di luogo nella ricerca, parametro `layer`
 
@@ -226,7 +226,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
 - [x] **Step 2:** lanciare; atteso `FAIL`.
 - [x] **Step 3:** implementare.
 - [x] **Step 4:** `node --test tests/js/*.test.js` e `tests/php/app-filters.php`; atteso `PASS`.
-- [ ] **Step 5 (commit del dev):** `feat(oc:9018): filtri di luogo dagli overlay in un solo parametro layer`
+- [x] **Step 5 (commit del dev):** `feat(oc:9018): filtri di luogo dagli overlay in un solo parametro layer` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 6: mappa, colore delle linee e anello
 
@@ -244,7 +244,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
 - [x] **Step 2:** lanciare; atteso `FAIL` sui casi di `strokeColor` e `roundtrip`.
 - [x] **Step 3:** implementare.
 - [x] **Step 4:** `node --test tests/js/track-map.test.js`; atteso `PASS`.
-- [ ] **Step 5 (commit del dev):** `feat(oc:9018): colore della linea da strokeColor o dal primo layer colorato, anello dallo shard`
+- [x] **Step 5 (commit del dev):** `feat(oc:9018): colore della linea da strokeColor o dal primo layer colorato, anello dallo shard` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 7: indirizzi vecchi nello storico prima che servano
 
@@ -276,7 +276,7 @@ test PHP con `wp eval-file`, test JS con `node --test`.
   giro dopo.
 - [x] **Step 4:** lanciare i tre test e tutta la suite PHP del dettaglio (`tests/php/detail-*.php`); atteso
   `PASS`.
-- [ ] **Step 5 (commit del dev):** `feat(oc:9018): indirizzi vecchi degli elementi nello storico, anche codificati e inglesi`
+- [x] **Step 5 (commit del dev):** `feat(oc:9018): indirizzi vecchi degli elementi nello storico, anche codificati e inglesi` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
 
 ### Task 8: documentazione, versione, verifica
 
@@ -289,4 +289,4 @@ test PHP con `wp eval-file`, test JS con `node --test`.
 - [x] **Step 2:** alzare la versione a `0.6.0` e scrivere la voce del `CHANGELOG`.
 - [x] **Step 3:** lanciare tutta la suite: ogni `tests/php/*.php` con `wp eval-file` e
   `node --test tests/js/*.test.js`; atteso `PASS` su tutti.
-- [ ] **Step 4 (commit del dev):** `docs(oc:9018): nuove chiavi delle faccette, colore delle linee, versione 0.6.0`
+- [x] **Step 4 (commit del dev):** `docs(oc:9018): nuove chiavi delle faccette, colore delle linee, versione 0.6.0` — fatto nel commit unico `226a9a1` (24/11), su richiesta del dev
