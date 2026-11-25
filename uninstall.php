@@ -21,6 +21,7 @@ $wmwp_uninstall = function () {
 		'wmwp_detail_paths_seed_pending',
 		'wmwp_detail_paths_failed_at',
 		'wmwp_poi_search_copy',
+		'wmwp_tracks_copy',
 		// oc:9018
 		'wmwp_app_config_v2',
 		'wmwp_app_config_failed_at',

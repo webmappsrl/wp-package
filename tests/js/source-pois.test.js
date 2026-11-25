@@ -120,3 +120,19 @@ test('senza faccetta dei tipi, le aree non vanno alla rotta come poi_type[]', as
   assert.deepEqual(url.searchParams.getAll('poi_type[]'), []);
   assert.deepEqual(url.searchParams.getAll('layer[]'), ['3']);
 });
+
+// Griglia dei POI (oc:9003): la prima ricerca usa la pagina già disegnata dal server (config.initial), una volta sola
+test('in modalità griglia la prima ricerca usa config.initial senza chiamare la rotta', async () => {
+  const fs2 = require('node:fs');
+  const calls = [];
+  const fetch = (url) => { calls.push(url); return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ total: 0, items: [] }) }); };
+  const registered = {};
+  const source = { id: 'pois', endpoint: 'https://sito.example/wp-json/wmwp/v1/pois', facets: [{ key: 'tipo-poi' }] };
+  const initial = { total: 978, items: [], facets: [] };
+  const window = { wmWpSearch: { config: { sources: [source], grid: true, initial }, registerSource: (id, impl) => { registered[id] = impl; } } };
+  vm.runInNewContext(fs2.readFileSync(SCRIPT, 'utf8'), { window, fetch, URL, Promise, Error, Object, String, Array });
+  assert.deepEqual(await registered.pois.search(query({ rawText: '' }), null), initial);
+  assert.equal(calls.length, 0);
+  await registered.pois.search(query({ rawText: '' }), null);
+  assert.equal(calls.length, 1);
+});

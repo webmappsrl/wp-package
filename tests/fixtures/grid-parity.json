@@ -1,0 +1,279 @@
+{
+  "_nota": "Casi condivisi fra tests/php/tracks-route.php e tests/js/search-logic.test.js (oc:9003): la stessa copia, le stesse faccette, gli stessi conteggi attesi. Chi cambia una regola delle faccette in search-logic.js o in includes/grid.php deve far passare tutti e due.",
+  "tracks": [
+    {
+      "id": 1,
+      "name": {
+        "it": "Uno"
+      },
+      "distance": 0.6,
+      "layers": [
+        11
+      ],
+      "taxonomyActivities": [
+        "mtb"
+      ],
+      "terms": {
+        "walkability-status": [
+          {
+            "identifier": "open",
+            "name": {
+              "it": "Aperto"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "name": {
+        "it": "Due"
+      },
+      "distance": 0,
+      "layers": [
+        11
+      ],
+      "taxonomyActivities": [
+        "horse"
+      ],
+      "terms": {
+        "walkability-status": [
+          {
+            "identifier": "open",
+            "name": {
+              "it": "Aperto"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "name": {
+        "it": "Tre"
+      },
+      "distance": 12,
+      "layers": [
+        11
+      ],
+      "taxonomyActivities": [
+        "hiking"
+      ],
+      "terms": {
+        "walkability-status": [
+          {
+            "identifier": "closed",
+            "name": {
+              "it": "Chiuso"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "name": {
+        "it": "Quattro"
+      },
+      "distance": 5,
+      "layers": [
+        11,
+        3
+      ],
+      "taxonomyActivities": [
+        "mtb",
+        "hiking"
+      ],
+      "terms": {
+        "walkability-status": [
+          {
+            "identifier": "closed",
+            "name": {
+              "it": "Chiuso"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "name": {
+        "it": "Cinque"
+      },
+      "distance": 3,
+      "layers": [
+        11
+      ],
+      "taxonomyActivities": [
+        "hiking"
+      ],
+      "terms": {}
+    }
+  ],
+  "facets": [
+    {
+      "key": "activity",
+      "label": "Attività",
+      "type": "list",
+      "field": "taxonomyActivities"
+    },
+    {
+      "key": "walkability",
+      "label": "Percorribilità",
+      "type": "terms",
+      "field": "terms.walkability-status",
+      "missing": "unknown"
+    },
+    {
+      "key": "track_distance",
+      "label": "Lunghezza",
+      "type": "slider",
+      "field": "distance",
+      "min": 1,
+      "max": 30,
+      "step": 3,
+      "units": "km"
+    }
+  ],
+  "cases": [
+    {
+      "filters": {},
+      "ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "counts": {
+        "activity": {
+          "hiking": 3,
+          "mtb": 2,
+          "horse": 1
+        },
+        "walkability": {
+          "open": 2,
+          "closed": 2,
+          "unknown": 1
+        }
+      }
+    },
+    {
+      "filters": {
+        "activity": [
+          "mtb",
+          "horse"
+        ]
+      },
+      "ids": [
+        1,
+        2,
+        4
+      ],
+      "counts": {
+        "activity": {
+          "hiking": 3,
+          "mtb": 2,
+          "horse": 1
+        },
+        "walkability": {
+          "open": 2,
+          "closed": 1
+        }
+      }
+    },
+    {
+      "filters": {
+        "activity": [
+          "mtb",
+          "horse"
+        ],
+        "walkability": [
+          "open"
+        ]
+      },
+      "ids": [
+        1,
+        2
+      ],
+      "counts": {
+        "activity": {
+          "mtb": 1,
+          "horse": 1
+        },
+        "walkability": {
+          "open": 2,
+          "closed": 1
+        }
+      }
+    },
+    {
+      "filters": {
+        "track_distance": [
+          "-10"
+        ]
+      },
+      "ids": [
+        1,
+        4,
+        5
+      ],
+      "counts": {
+        "activity": {
+          "hiking": 2,
+          "mtb": 2
+        },
+        "walkability": {
+          "closed": 1,
+          "open": 1,
+          "unknown": 1
+        }
+      }
+    },
+    {
+      "filters": {
+        "track_distance": [
+          "10-4"
+        ]
+      },
+      "ids": [
+        4
+      ],
+      "counts": {
+        "activity": {
+          "mtb": 1,
+          "hiking": 1
+        },
+        "walkability": {
+          "closed": 1
+        }
+      }
+    },
+    {
+      "filters": {
+        "track_distance": [
+          "abc"
+        ]
+      },
+      "ids": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "counts": {
+        "activity": {
+          "hiking": 3,
+          "mtb": 2,
+          "horse": 1
+        },
+        "walkability": {
+          "open": 2,
+          "closed": 2,
+          "unknown": 1
+        }
+      }
+    }
+  ]
+}

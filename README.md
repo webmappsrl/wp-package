@@ -56,6 +56,46 @@ la rotta risponde 503 e programma subito la ricostruzione dell'indice, invece di
 senza i luoghi (scritta prima della 0.5.0 finale) risponde, senza luoghi, e programma la ricostruzione allo stesso
 modo.
 
+## Griglie
+
+Gli shortcode `[wmwp_tracks_grid id="…"]` e `[wmwp_pois_grid id="…"]` (oc:9003, `includes/grid.php`) mostrano una
+griglia di card con le faccette, per le pagine d'elenco di un sito (es. «Sentieri»). Sono l'interfaccia della ricerca in
+**modalità griglia** (`config.grid` di `search.js`): una source sola, senza tab, con il campo di testo; faccette, filtri
+attivi, pagine, annunci e pannello dei filtri sul telefono sono quelli della ricerca. Una griglia per pagina, e non
+nella pagina della ricerca: configurazione e parametri sono unici.
+
+La configurazione la dà il tema con il filter `wmwp_grid_config` (`apply_filters( 'wmwp_grid_config', null, $id )`):
+
+- `type`: `tracks` o `pois`;
+- `layer` (solo `tracks`): id del layer i cui percorsi vanno nella griglia, filtro fisso che non usa il parametro
+  `layer` dell'indirizzo (resta quello della faccetta delle aree). Assente, 0 o null: un messaggio, mai tutte le tracce.
+  Per non scrivere id che cambiano fra ambienti, `wmwp_tracks_layer_for_term( $famiglia, $termine, $ammessi )` dà, fra
+  i layer ammessi, quello con più tracce di un termine (es. il layer «Sentieri» per `route-type-trail`);
+- `facets` (solo `tracks`): faccette nel formato della ricerca, compresi `from_config`, `from_families`,
+  `from_overlays` e gli slider; la griglia dei POI usa quelle della source `pois` della ricerca;
+- `per_page`, `nouns` (`one`/`other` con `%s`, per «27 sentieri»).
+
+**Percorsi dal server.** La griglia dei percorsi non scarica l'indice nel browser (2,7 MB senza compressione né cache su
+Forestas): lavora su una **copia delle tracce** (`includes/tracks-copy.php`, option `wmwp_tracks_copy` senza autoload),
+scritta dal rebuild dell'indice dei dettagli dallo stesso download della lista Elasticsearch e solo quando quel rebuild
+è accettato, come la copia dei POI (cron orario, scarto delle liste a metà). La rotta `GET wmwp/v1/tracks` (`grid`,
+`lang`, `pg`, `q` e i parametri delle faccette come nell'indirizzo; con `q` gli id li dà l'API Elasticsearch dello
+shard, come nella ricerca unica, con la risposta nell'object cache: 10 minuti per testo con un object cache esterno,
+altrimenti la sola richiesta, mai nei transient perché la rotta è pubblica) filtra, conta e pagina sulla copia con le regole di
+`search-logic.js` rifatte in PHP, in ordine di nome (come la ricerca unica) e risponde `total`, `page`, `pages`, `items` (card costruite come `toCard()` della
+source `tracks`, con le sue chiavi) e `facets`; 503 senza copia, 404 per una griglia che il tema non configura. La
+prima pagina (card, numero, link alle pagine) arriva già nell'HTML: la vedono anche i crawler e chi non ha
+JavaScript; il JS (`source-grid-tracks.js`) la riceve in `config.initial` e non chiama la rotta per ripeterla.
+
+**Slider.** Un filtro `type: slider` di `MAP.filters` (es. `track_distance`, `track_duration`) diventa una faccetta
+`slider` con `from_config`: limiti, passo e unità dal `config.json`, campo dell'indice dall'`identifier`. Si disegna con
+due `input type="range"` nativi (minimo e massimo), nella griglia e nella ricerca. Estremi aperti: un cursore al suo
+estremo non pone limiti da quel lato (anche quando il passo non arriva al `max`: con `min 1`, `max 30`, `steps 3` il
+cursore arriva a 28 e vale «nessun massimo»); un percorso senza valore (0 nell'indice) non passa un filtro attivo. Le
+app chiudono invece l'intervallo appena si tocca lo slider. Nell'indirizzo il valore è `<min>-<max>` con un lato vuoto
+se aperto (`?track_distance=-10`). Uno slider compare solo se qualche percorso ha il valore; si applica quando il
+valore si ferma, con una sola voce di cronologia.
+
 ## Interfaccia pubblica
 
 Fino alla 1.0 può cambiare (vedi sopra). Tutto ciò che non è in questo elenco è interno.
@@ -319,6 +359,10 @@ percorso va all'elemento che oggi porta quel nome e i percorsi di prima degli om
 Serve alle correzioni a mano: con le regole dello storico un nome corretto su un altro elemento lascia quest'ultimo con
 il suffisso (oc:8983).
 
+`wp wmwp tracks-copy load <file>` riempie la copia delle tracce delle griglie da una risposta salvata dell'API
+Elasticsearch (per provare in locale con i dati di un altro ambiente), `wp wmwp tracks-copy refresh` la ricarica dallo
+shard collegato con un rebuild dell'indice; il rebuild orario la riscrive comunque (oc:9003).
+
 ## Mappa
 
 Un componente solo per tutto il sito (ricerca, dettaglio di track, POI, layer): il componente `FeatureCollectionMap`
@@ -515,7 +559,8 @@ Testi di base in inglese, traduzione italiana in `languages/`. Per rigenerarle c
 
 ## Test
 
-`node --test tests/js/*.test.js` prova la logica pura della ricerca, la source `tracks` e la source `pois` (`source-pois.test.js`; in una finestra finta, con
+`node --test tests/js/*.test.js` prova la logica pura della ricerca (slider compresi), la source `tracks`, la source delle griglie
+(`source-grid-tracks.test.js`) e la source `pois` (`source-pois.test.js`; in una finestra finta, con
 l'API finta), le tracce da `api/ec/track/multiple` (con un fetch finto), le tracce per la mappa e la conversione in
 GPX, KML e GeoJSON (Node 18 o successivo; con Node 22 `node --test tests/js/` senza `*.test.js` non trova i file).
 Con WP-CLI, dalla cartella di WordPress: `wp eval-file <plugin>/tests/php/shards-fallback.php` prova la
@@ -527,6 +572,8 @@ dettaglio (slug, basi, cache dell'indice con lo shard finto, risoluzione e redir
 sitemap e hreflang, storico dei percorsi); `detail-data.php` le letture dei dati del dettaglio, `detail-kind.php` il
 tipo delle tracce dal filtro `wmwp_track_kind_taxonomy` (base e indice), `detail-status.php` percorribilità e avviso,
 `status.php` il registro degli stati e le tacche, `search-pois.php` la source dei POI (copia e rotta `wmwp/v1/pois`),
+`tracks-copy.php` la copia delle tracce delle griglie, `tracks-route.php` la ricerca sulla copia e la rotta
+`wmwp/v1/tracks`, `grid-render.php` gli shortcode delle griglie (prima pagina dal server),
 `app-config.php` il `config.json` scaricato dal cron, `app-filters.php` i filtri dal `config.json`, `app-overlays.php`
 aree degli overlay e appartenenza dei POI, `detail-legacy.php` gli indirizzi vecchi nello storico, `detail-print.php`
 l'indirizzo della scheda PDF (oc:9018).

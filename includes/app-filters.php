@@ -52,6 +52,47 @@ function wmwp_app_label( $names, string $lang ): array {
 }
 
 /**
+ * Faccetta slider da un filtro `type: slider` di `MAP.filters` (oc:9003), come la disegna wm-core: chiave del filtro
+ * (es. `track_distance`, anche nome del parametro dell'indirizzo), campo dell'indice (`identifier`), limiti, passo
+ * (`steps`) e unità. Null se mancano limiti o passo numerici, o se l'intervallo è vuoto: il config.json può avere un
+ * filtro acceso in Nova senza valori.
+ *
+ * @param array<string, mixed> $filter Filtro di `MAP.filters`.
+ * @param array<string, mixed> $facet  Faccetta del tema (`from_config`, eventuale `label`).
+ * @return array<string, mixed>|null
+ */
+function wmwp_app_slider_facet( string $name, array $filter, array $facet, string $lang ): ?array {
+	$field = trim( (string) ( $filter['identifier'] ?? '' ) );
+	$min   = $filter['min'] ?? null;
+	$max   = $filter['max'] ?? null;
+	$step  = $filter['steps'] ?? null;
+	if ( '' === $field || ! is_numeric( $min ) || ! is_numeric( $max ) || ! is_numeric( $step ) || (float) $step <= 0 || (float) $max <= (float) $min ) {
+		return null;
+	}
+	$title = wmwp_app_label( $filter['name'] ?? [], $lang );
+	unset( $facet['from_config'] );
+	if ( isset( $facet['label'] ) && ! array_key_exists( 'label_lang', $facet ) ) {
+		$facet['label_lang'] = null;
+	}
+	return array_merge(
+		[
+			'key'        => $name,
+			'label'      => '' !== $title['text'] ? $title['text'] : $name,
+			'label_lang' => $title['lang'],
+		],
+		$facet,
+		[
+			'type'  => 'slider',
+			'field' => $field,
+			'min'   => (float) $min,
+			'max'   => (float) $max,
+			'step'  => (float) $step,
+			'units' => (string) ( $filter['units'] ?? '' ),
+		]
+	);
+}
+
+/**
  * Faccetta del tema con `from_config` completata da `MAP.filters`; null se il config.json non c'è o non ha quel filtro.
  *
  * @param array<string, mixed> $facet Faccetta del tema.
@@ -61,6 +102,9 @@ function wmwp_app_filter_facet( array $facet, string $lang ): ?array {
 	$name   = (string) ( $facet['from_config'] ?? '' );
 	$config = wmwp_app_config();
 	$filter = $config['MAP']['filters'][ $name ] ?? null;
+	if ( is_array( $filter ) && 'slider' === ( $filter['type'] ?? '' ) ) {
+		return wmwp_app_slider_facet( $name, $filter, $facet, $lang );
+	}
 	if ( ! isset( WMWP_APP_FILTER_FIELDS[ $name ] ) || ! is_array( $filter ) || 'select' !== ( $filter['type'] ?? '' ) ) {
 		return null;
 	}

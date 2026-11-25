@@ -198,7 +198,22 @@ $check( 'it' === ( $places[1]['label_lang'] ?? '' ) && 'it' === ( $places[1]['la
 // Il parametro delle aree è fisso (`layer`): lo legge anche la rotta dei POI (review interna, C9)
 $check( [ 'layer' ] === array_unique( array_column( wmwp_app_expand_facets( [ [ 'from_overlays' => true, 'param' => 'zona' ] ], 'en' ), 'param' ) ), 'overlay: param del tema ignorato' );
 
+// Slider di MAP.filters (oc:9003): chiave del filtro, campo dell'indice, limiti, passo e unità dal config.json
+$use_fixture( 'uat' );
+$distance = wmwp_app_filter_facet( [ 'from_config' => 'track_distance' ], 'it' );
+$check( 'slider' === ( $distance['type'] ?? '' ) && 'track_distance' === ( $distance['key'] ?? '' ) && 'distance' === ( $distance['field'] ?? '' ), 'slider: tipo, chiave e campo' );
+$check( 1.0 === ( $distance['min'] ?? null ) && 30.0 === ( $distance['max'] ?? null ) && 3.0 === ( $distance['step'] ?? null ) && 'km' === ( $distance['units'] ?? '' ), 'slider: limiti, passo e unità' );
+$check( 'Lunghezza del sentiero' === ( $distance['label'] ?? '' ), 'slider: nome italiano' );
+$duration = wmwp_app_filter_facet( [ 'from_config' => 'track_duration' ], 'en' );
+$check( 'Travel time' === ( $duration['label'] ?? '' ) && 'duration_forward' === ( $duration['field'] ?? '' ) && 30.0 === ( $duration['step'] ?? null ), 'slider: nome inglese, campo e passo del tempo' );
+$broken = wmwp_app_config();
+$broken['MAP']['filters']['track_distance']['min'] = '';
+update_option( WMWP_APP_CONFIG_OPTION, [ 'url' => wmwp_app_config_url(), 'config' => $broken ], false );
+$check( null === wmwp_app_filter_facet( [ 'from_config' => 'track_distance' ], 'it' ), 'slider senza minimo: nessuna faccetta' );
+$check( [] === wmwp_app_expand_facets( [ [ 'from_config' => 'track_distance' ] ], 'it' ), 'slider senza minimo: sparisce dalle faccette' );
+
 $restore();
+
 
 if ( $failures ) {
 	echo 'FAIL: ' . implode( '; ', $failures ) . "\n";

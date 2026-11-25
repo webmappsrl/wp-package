@@ -406,3 +406,85 @@ test('computeFacets: valore scelto a 0 con il nome dei percorsi, non l\'identifi
   const [solo] = L.computeFacets(tracce, [scala], { 'hiking-difficulty': ['hiking-difficulty-xx'] }, 'it');
   assert.equal(solo.values.find((v) => v.id === 'hiking-difficulty-xx').label, 'hiking-difficulty-xx');
 });
+
+// --- Faccette slider (oc:9003): limiti, passo e unità dal config.json (MAP.filters), estremi aperti -----------------
+// I percorsi della fixture hanno distanza 0: i valori si danno qui, così le altre prove restano sulla fixture com'è.
+const DISTANCE = { key: 'track_distance', type: 'slider', field: 'distance', min: 1, max: 30, step: 3, units: 'km', label: 'Lunghezza del sentiero' };
+const DURATION = { key: 'track_duration', type: 'slider', field: 'duration_forward', min: 30, max: 900, step: 30, units: 'min', label: 'Tempo di percorrenza' };
+const conDistanze = (distanze) => hits.slice(0, distanze.length).map((hit, i) => Object.assign({}, hit, { distance: distanze[i] }));
+
+test('lastStep è l\'ultimo valore che un range con quel passo raggiunge', () => {
+  assert.equal(L.lastStep({ min: 1, max: 30, step: 3 }), 28);
+  assert.equal(L.lastStep({ min: 30, max: 900, step: 30 }), 900);
+});
+
+test('sliderBounds: un lato vuoto o all\'estremo non pone limiti', () => {
+  assert.deepEqual(L.sliderBounds(DISTANCE, '-10'), { min: null, max: 10 });
+  assert.deepEqual(L.sliderBounds(DISTANCE, '1-28'), { min: null, max: null });
+  assert.deepEqual(L.sliderBounds(DISTANCE, '4-'), { min: 4, max: null });
+  assert.deepEqual(L.sliderBounds(DISTANCE, '4-30'), { min: 4, max: null });
+  assert.deepEqual(L.sliderBounds(DISTANCE, 'abc'), { min: null, max: null });
+  assert.deepEqual(L.sliderBounds(DISTANCE, ''), { min: null, max: null });
+});
+
+test('filterHits con uno slider: «fino a 10 km» tiene i percorsi sotto il minimo, toglie quelli senza valore', () => {
+  const tracce = conDistanze([0.6, 0, 12, 5]);
+  const tenuti = L.filterHits(tracce, [DISTANCE], { track_distance: ['-10'] }, 'it').map((h) => h.distance);
+  assert.deepEqual(tenuti, [0.6, 5]);
+});
+
+test('filterHits con uno slider ai due estremi non toglie nulla, nemmeno i percorsi senza valore', () => {
+  const tracce = conDistanze([0.6, 0, 40]);
+  assert.equal(L.filterHits(tracce, [DISTANCE], { track_distance: ['1-28'] }, 'it').length, 3);
+});
+
+test('computeFacets di uno slider dice se qualche percorso ha il valore', () => {
+  const [vuoto] = L.computeFacets(conDistanze([0, 0]), [DISTANCE], {}, 'it');
+  assert.equal(vuoto.type, 'slider');
+  assert.equal(vuoto.available, false);
+  const [pieno] = L.computeFacets(conDistanze([0, 4.2]), [DISTANCE, DURATION], {}, 'it');
+  assert.equal(pieno.available, true);
+  assert.equal(pieno.key, 'track_distance');
+  assert.equal(pieno.label, 'Lunghezza del sentiero');
+});
+
+test('il valore di uno slider va e torna dall\'indirizzo così com\'è', () => {
+  const keys = ['track_distance'];
+  const search = L.stateToSearch({ text: '', tab: '', page: 1, filters: { track_distance: ['-10'] } }, PARAMS, keys);
+  assert.equal(search, '?track_distance=-10');
+  assert.deepEqual(L.parseState(search, PARAMS, keys).filters, { track_distance: ['-10'] });
+});
+
+// Stessi numeri della ricerca sul server (wmwp_grid_compute_facets(), tests/php/tracks-route.php, oc:9003): chi cambia
+// una regola qui la cambia anche in includes/grid.php
+test('computeFacets dà gli stessi conteggi di wmwp_grid_compute_facets() sulla fixture', () => {
+  const sel = { difficolta: ['sardegnasentieri:tid:4067'] };
+  const [att, diff] = L.computeFacets(hits, [ACTIVITIES, DIFFICULTY], sel, 'it');
+  assert.deepEqual(values(att), { hiking: 1, mtb: 1 });
+  assert.deepEqual(values(diff), { 'sardegnasentieri:tid:4066': 2, 'sardegnasentieri:tid:4067': 1 });
+  assert.equal(L.filterHits(hits, [ACTIVITIES, DIFFICULTY], sel, 'it').length, 1);
+});
+
+// Casi condivisi con tests/php/tracks-route.php (tests/fixtures/grid-parity.json, oc:9003): stessi risultati e conteggi
+// della ricerca sul server
+const parity = require('../fixtures/grid-parity.json');
+parity.cases.forEach((c, n) => {
+  test(`caso condiviso ${n}: stessi percorsi e conteggi di wmwp_tracks_query()`, () => {
+    const ids = L.filterHits(parity.tracks, parity.facets, c.filters, 'it').map((t) => t.id);
+    assert.deepEqual(ids, c.ids);
+    const views = L.computeFacets(parity.tracks, parity.facets, c.filters, 'it');
+    Object.keys(c.counts).forEach((key) => {
+      const view = views.find((v) => v.key === key);
+      assert.deepEqual(values(view), c.counts[key]);
+    });
+  });
+});
+
+test('valore di uno slider: malformato → nessuno, rovesciato → in ordine', () => {
+  assert.equal(L.sliderValue(DISTANCE, 'abc'), '');
+  assert.equal(L.sliderValue(DISTANCE, '10-4'), '4-10');
+  assert.equal(L.sliderValue(DISTANCE, '-10'), '-10');
+  assert.equal(L.sliderValue(DISTANCE, '1-28'), '');
+  const [view] = L.computeFacets(conDistanze([5]), [DISTANCE], { track_distance: ['10-4'] }, 'it');
+  assert.equal(view.value, '4-10');
+});
