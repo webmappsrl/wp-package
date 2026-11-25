@@ -1,0 +1,7 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  { "type": "Feature", "properties": { "name": "Aree no caccia" },
+    "geometry": { "type": "Polygon", "coordinates": [ [[0,0],[100,0],[100,100],[0,100],[0,0]] ] } }
+ ]
+}

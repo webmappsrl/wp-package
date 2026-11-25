@@ -93,6 +93,14 @@
   // Filtro i cui valori vanno all'inizio della riga (es. i comuni), indicato dal tema con meta_facet
   var metaFacet = (source.facets || []).find(function (facet) { return facet.key === source.meta_facet; }) || null;
 
+  // Ultimo valore del campo indicato dal tema con meta_last_field (es. taxonomyWheres: il comune), come la card delle app
+  // (oc:9018); '' senza campo o senza valori
+  function lastValue(hit) {
+    var list = source.meta_last_field ? L.fieldValue(hit, source.meta_last_field) : null;
+    var last = Array.isArray(list) && list.length ? list[list.length - 1] : '';
+    return last == null ? '' : String(last).trim();
+  }
+
   function badgeFor(hit, lang) {
     var badge = L.firstTerm(hit, source.badge_field, lang, source.term_labels);
     return badge && (source.badge_exclude || []).indexOf(badge.key) !== -1 ? null : badge;
@@ -113,7 +121,7 @@
       image: hit.feature_image ? { src: hit.feature_image, alt: '' } : null,
       code: hit.ref ? String(hit.ref).trim() : null,
       meta: [
-        metaFacet ? L.facetValues(hit, metaFacet, lang).map(function (value) { return value.label; }).join(', ') : '',
+        metaFacet ? L.facetValues(hit, metaFacet, lang).map(function (value) { return value.label; }).join(', ') : lastValue(hit),
         L.formatKm(hit.distance, lang),
         ascent ? '+' + ascent : '',
         L.formatDuration(hit.duration_forward, lang)

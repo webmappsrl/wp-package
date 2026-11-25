@@ -1,0 +1,13 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  { "type": "Feature", "properties": { "layer_id": 3, "name": "Area D" },
+    "geometry": { "type": "Polygon", "coordinates": [ [[0,0],[10,0],[10,10],[0,10],[0,0]], [[4,4],[6,4],[6,6],[4,6],[4,4]] ] } },
+  { "type": "Feature", "properties": { "layer_id": 206, "name": "Area di Geohub" },
+    "geometry": { "type": "Polygon", "coordinates": [ [[20,0],[30,0],[30,10],[20,10],[20,0]] ] } },
+  { "type": "Feature", "properties": { "layer_id": 50, "name": "Supramontes" },
+    "geometry": { "type": "MultiPolygon", "coordinates": [ [ [[40,0],[45,0],[45,5],[40,5],[40,0]] ], [ [[50,0],[55,0],[55,5],[50,5],[50,0]] ] ] } },
+  { "type": "Feature", "properties": { "name": "Senza layer" },
+    "geometry": { "type": "Polygon", "coordinates": [ [[60,0],[70,0],[70,10],[60,10],[60,0]] ] } }
+ ]
+}

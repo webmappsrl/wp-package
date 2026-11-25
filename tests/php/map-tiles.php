@@ -1,8 +1,8 @@
 <?php
 /**
  * Test (oc:8952): carta di base e colori dei layer della mappa vengono dal config.json dell'app configurata (prima voce
- * di MAP.tiles, `style.color` di MAP.layers), letto una volta e tenuto in cache; senza risposta resta OpenStreetMap e
- * nessun colore. Le risposte dello shard sono finte (pre_http_request). Si lancia con:
+ * di MAP.tiles, `style.color` di MAP.layers), dalla copia scaricata da WP-Cron (oc:9018); senza copia resta
+ * OpenStreetMap e nessun colore. Le risposte dello shard sono finte (pre_http_request). Si lancia con:
  * wp eval-file tests/php/map-tiles.php
  * Stampa «PASS» o «FAIL: …» ed esce con 0 o 1. Rimette opzioni e transient com'erano.
  */
@@ -107,27 +107,39 @@ add_filter(
 	10,
 	3
 );
-$key = WMWP_MAP_CONFIG_CACHE_PREFIX . md5( wmwp_app_config_url() );
-delete_transient( $key );
+// La copia la scarica il cron (oc:9018): la pagina non chiama mai lo shard
+$saved_copy   = get_option( WMWP_APP_CONFIG_OPTION, null );
+$saved_failed = get_option( WMWP_APP_CONFIG_FAILED_OPTION, null );
+delete_option( WMWP_APP_CONFIG_OPTION );
+$check( [] === wmwp_map_tiles() && 0 === $calls, 'senza copia: nessuna carta e nessuna richiesta nella pagina' );
+wmwp_app_config_refresh();
 $first  = wmwp_map_tiles();
 $second = wmwp_map_tiles();
 $layers = wmwp_map_layer_colors();
-$check( 1 === $calls, "una richiesta sola al config.json per carta e colori, invece di {$calls}" );
+$check( 1 === $calls, "una richiesta sola al config.json, dal cron, invece di {$calls}" );
 $check( 'http://server.test/api/app/webmapp/1/config.json' === $last_url, "config.json chiesto all'indirizzo del server, non a {$last_url}" );
 $check( [ [ 'id' => 11, 'color' => '#de1b0d' ] ] === $layers, 'colori dei layer letti dallo shard' );
-$check( 'https://api.webmapp.it/tiles/{z}/{x}/{y}.png' === ( $first['url'] ?? '' ) && $first === $second, 'carta letta dallo shard e poi dalla cache' );
+$check( 'https://api.webmapp.it/tiles/{z}/{x}/{y}.png' === ( $first['url'] ?? '' ) && $first === $second, 'carta letta dalla copia' );
 
-delete_transient( $key );
 $answer = 'down';
-$check( [] === wmwp_map_tiles(), 'shard che non risponde: nessuna carta, resta OpenStreetMap' );
-$check( [] === wmwp_map_layer_colors(), 'shard che non risponde: nessun colore dei layer' );
+$check( false === wmwp_app_config_refresh(), 'shard che non risponde: il cron lo dice' );
+$check( 'https://api.webmapp.it/tiles/{z}/{x}/{y}.png' === ( wmwp_map_tiles()['url'] ?? '' ), "shard che non risponde: resta l'ultima carta buona" );
+delete_option( WMWP_APP_CONFIG_OPTION );
+$check( [] === wmwp_map_tiles(), 'senza nessuna copia: nessuna carta, resta OpenStreetMap' );
+$check( [] === wmwp_map_layer_colors(), 'senza nessuna copia: nessun colore dei layer' );
 
 add_filter( 'wp_package_map_tiles', fn() => [ 'url' => 'https://tema.example/{z}/{x}/{y}.png' ] );
 $check( 'https://tema.example/{z}/{x}/{y}.png' === ( wmwp_map_tiles()['url'] ?? '' ), 'il tema cambia la carta con wp_package_map_tiles' );
 add_filter( 'wp_package_map_layer_colors', fn() => [ [ 'id' => 1, 'color' => '#000000' ] ] );
 $check( [ [ 'id' => 1, 'color' => '#000000' ] ] === wmwp_map_layer_colors(), 'il tema cambia i colori con wp_package_map_layer_colors' );
 
-delete_transient( $key );
+if ( null === $saved_copy ) {
+	delete_option( WMWP_APP_CONFIG_OPTION );
+} else {
+	update_option( WMWP_APP_CONFIG_OPTION, $saved_copy, false );
+}
+// Il download fallito del test segna l'ora del fallimento (oc:9018): rimessa com'era
+null === $saved_failed ? delete_option( WMWP_APP_CONFIG_FAILED_OPTION ) : update_option( WMWP_APP_CONFIG_FAILED_OPTION, $saved_failed, false );
 remove_filter( 'wmwp_api_urls', $browser_urls, 99 );
 remove_filter( 'wmwp_server_origin', $server_origin, 99 );
 update_option( WMWP_OPTION_SHARD, $saved_shard );

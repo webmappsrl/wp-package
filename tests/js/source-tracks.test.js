@@ -43,7 +43,7 @@ function load(options = {}) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ type: 'FeatureCollection', features }) });
     }
     calls.search.push(parsed.searchParams.get('query'));
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ hits: HITS }) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ hits: options.hits || HITS }) });
   };
   const source = Object.assign({
     id: 'tracks',
@@ -149,4 +149,13 @@ test('badge_exclude (oc:9000): i valori indicati dal tema non hanno l\'etichetta
   assert.equal(result.items.find((item) => item.id === 473).badge, null);
   const plain = await load().impl.search(query());
   assert.deepEqual(plain.items.find((item) => item.id === 473).badge, { key: 'validated', label: 'Validato' });
+});
+
+// oc:9018: all'inizio della riga l'ultimo luogo (meta_last_field, es. taxonomyWheres: il comune), come la card delle app
+test('meta_last_field mette all\'inizio della riga l\'ultimo valore del campo', async () => {
+  const withPlaces = HITS.map((hit) => Object.assign({}, hit, { taxonomyWheres: hit.id === 473 ? ['Sardegna', 'Area G (Nord-EST)', 'Sassari', 'Bottidda'] : [] }));
+  const { impl } = load({ hits: withPlaces, source: { meta_last_field: 'taxonomyWheres' } });
+  const result = await impl.search(query());
+  assert.equal(result.items.find((item) => item.id === 473).meta[0], 'Bottidda');
+  assert.equal(result.items.find((item) => item.id === 250).meta[0], '');
 });

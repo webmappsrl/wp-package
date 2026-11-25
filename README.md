@@ -79,7 +79,9 @@ Fino alla 1.0 può cambiare (vedi sopra). Tutto ciò che non è in questo elenco
 Chiavi della source `tracks`: `endpoint` e `app` (calcolati dalle impostazioni), `link_template` (indirizzo del
 dettaglio con `{id}` e `{ref}`; vuoto = card senza link), `badge_field` (campo dell'etichetta di stato nella riga, es.
 `terms.validation-status`; vuoto = nessuna etichetta; classe `wmwp-badge--<identifier>`), `meta_facet` (`key` del filtro i cui
-valori vanno all'inizio della riga, es. i comuni), `term_labels` (identifier → nome, per tipo ed etichetta di stato
+valori vanno all'inizio della riga, es. i comuni), `meta_last_field` (campo del risultato di cui va all'inizio della
+riga solo l'ultimo valore, es. `taxonomyWheres`, che finisce con il comune: come la card delle app, oc:9018; vale se
+non c'è `meta_facet`), `term_labels` (identifier → nome, per tipo ed etichetta di stato
 nella lingua della pagina: l'API dà i nomi dei termini solo in italiano; senza, il nome dell'API). Con un testo
 cercato i percorsi che lo hanno nel nome vengono prima (l'API ordina per nome). `kind_field` (percorso nel risultato
 della famiglia che dà il tipo sulla card, es. `terms.route-type`; calcolato dal filtro `wmwp_track_kind_taxonomy`,
@@ -115,6 +117,34 @@ campo misto (es. `taxonomyWheres` in aree, province e comuni). OR dentro un filt
 calcolano senza il filtro stesso. I filtri valgono nel tab in cui si scelgono: cambiando tab si tolgono (il numero sul
 tab e «Vedi tutti» contano il solo testo, ed è quello che il tab mostra appena aperto); «Indietro» li ritrova.
 
+**Filtri dal `config.json` dell'app** (oc:9018), come le app Webmapp: il tema dice quali filtri vuole, il plugin ci
+mette valori, nomi e ordine dello shard. Il `config.json` (e i geojson degli overlay) li scarica solo WP-Cron, ogni
+ora, con richiesta condizionale (`wmwp_app_config()`, `wmwp_app_config_refresh()`); senza copia questi filtri non ci
+sono e la ricerca funziona lo stesso. Tre forme, nella lista `facets` della source, al posto di un filtro:
+
+- `[ 'key' => 'activity', 'from_config' => 'activities' ]` (o `layers`, `poi_types`): opzioni di `MAP.filters`,
+  solo quelle pubblicate (`include`), nell'ordine dell'array, con il nome nella lingua della pagina (`labels`) e la
+  lingua del nome quando è un'altra (`lang_labels`, che la faccetta mette in `lang`). Campo: `taxonomyActivities`,
+  `layers`, il tipo del POI; i tipi dei POI perdono il prefisso `poi_type_`, come in wm-core. La chiave `poi_type`
+  (copia per le app vecchie) non si usa. Il nome del filtro è quello di `MAP.filters`, salvo un `label` del tema.
+- `[ 'from_families' => '-difficulty', 'exclude' => [ 'inclusivity-difficulty' ], 'order' => [ famiglia => [ id… ] ] ]`:
+  un filtro per ogni famiglia di `LABELS.taxonomies` con quel suffisso (`type` `terms`, `field` `terms.<famiglia>`,
+  valore l'identifier intero: scale diverse non si mescolano), con il nome della famiglia; `order` è l'ordine di
+  ripiego del tema, `key_prefix` il prefisso della chiave. Un filtro senza valori non si mostra.
+- `[ 'from_overlays' => true ]`: un filtro per ogni overlay di `MAP.controls.overlays` con aree il cui `layer_id` sta
+  in `MAP.layers` (le altre si saltano), con il nome dell'overlay e un'opzione per area (nome del layer). Un percorso
+  sta in un'area se il suo `layers` ha il `layer_id`; un POI se il suo punto cade nel poligono (calcolato sul
+  server, `wmwp_poi_layers()`, rifatto quando cambiano le aree o la copia dei POI). Tutte le aree stanno in un solo
+  parametro dell'indirizzo, `layer`, come nelle app (`?layer=3,50`): `param` e `ids` della faccetta dicono a
+  `parseState()` e `stateToSearch()` quali id sono suoi. Il parametro è fisso (`WMWP_APP_AREA_PARAM`), perché lo legge
+  anche la rotta dei POI (`layer[]`): un `param` del tema si ignora. Chiave `area-<posizione dell'overlay>`
+  (`key_prefix`). Le geometrie le legge solo il cron; i filtri delle pagine leggono un'option piccola con gli id delle
+  aree.
+
+Un'opzione scelta resta anche a zero risultati, così si può togliere, con il nome che ha nei risultati che la hanno
+(poi quello del tema, poi l'identifier); le altre a zero non si mostrano. Un valore che non
+sta in nessun gruppo (`groups`) resta, dopo i gruppi, con il nome dello shard.
+
 **`wp_package_search_params`** — nomi dei parametri dell'indirizzo: `['q' => 'q', 'tab' => 'tab',
 'page' => 'pg', 'view' => 'view', 'map' => 'map']`; `view` è il nome del parametro della vista e `map` il valore
 della vista mappa («?view=map»; Forestas: «?vista=mappa»). Un nome vuoto, già usato da un altro parametro o che è una
@@ -122,6 +152,16 @@ query var pubblica di WordPress (`page`, `s`, `p`, `year`… : con `?page=2` su 
 il parametro e la ricerca torna alla pagina 1) torna al predefinito, con un avviso `_doing_it_wrong`. Lo stesso vale
 per la `key` di un filtro: se è una query var o il nome di un parametro prende il prefisso `f_` (`year` → `f_year`,
 anche in `meta_facet`).
+
+**`wmwp_detail_legacy_paths`** (oc:9018) — indirizzi vecchi di un elemento (es. quelli del sito di prima), da portare
+con un 301 alla sua pagina: riceve `[]`, il tipo (`track`, `poi`) e le proprietà (di `pois.geojson` per i POI, del
+dettaglio per i percorsi) e restituisce `[ [ 'lang' => 'it', 'path' => 'sentieri/nome' ], … ]` (solo
+`<base>/<slug>`; una lingua come `en` si abbina al codice del sito con lo stesso prefisso). Il plugin li mette nello
+storico, come righe non attuali con la chiave dell'elemento, alla ricostruzione dell'indice: i POI a ogni giro, i
+percorsi leggendo il dettaglio una volta, solo nel cron o da WP-CLI (**`wmwp_detail_legacy_can_read`**), al più 100
+letture e 60 secondi per giro; un dettaglio che non si legge, o senza indirizzo, si riprova dopo 6 ore. Le basi di
+quegli indirizzi entrano nelle regole di rewrite; un 404 sotto una base che c'è solo nello storico non forza la
+ricostruzione dell'indice.
 
 **`wmwp_api_urls`** — `[ 'elastic_api' => …, 'origin' => …, 'aws_api' => … ]` dello shard configurato: per uno
 shard che non sta in `environment.ts` (es. in locale). **`wmwp_server_origin`** — origin dello shard per le richieste
@@ -251,7 +291,11 @@ Funzioni dei dettagli per i temi: `wmwp_detail_url( $type, $id, $lang )` (indiri
 c'è; `$lang` è il codice WPML, es. `en-us`), `wmwp_detail_urls( $type, $id )` (lingua → indirizzo),
 `wmwp_detail_url_by_id( $type, $id, $lang )` (come la prima, ma controlla con la chiave stabile che l'id sia ancora
 dello stesso elemento e, se serve, ricostruisce l'indice: la usa l'indirizzo per id), `wmwp_detail_source( $type,
-$props )` (chiave stabile). Per le richieste allo shard `wmwp_http_json( $url, $timeout, $headers )` restituisce stato
+$props )` (chiave stabile), `wmwp_detail_print_url( $type, $id, $lang )` (scheda PDF dello shard,
+`<shard>/print/ec-track/<id>?lang=<lingua>` o `ec-poi`: '' se la stampa dell'app è spenta, cioè `OPTIONS.ec_pdf_enabled`
+del `config.json` non è `true`, o se la copia del `config.json` non c'è; `lang` solo se è fra `LANGUAGES.available`,
+altrimenti lo shard risponde 404. La rotta accoda la generazione del PDF: il link va marcato `rel="nofollow"`, e lo
+shard esclude `/print/` nel suo `robots.txt`; oc:9018). I `track.php` e `poi.php` di base non hanno il pulsante. Per le richieste allo shard `wmwp_http_json( $url, $timeout, $headers )` restituisce stato
 HTTP (0 se la richiesta non arriva), JSON decodificato, risposta e `error` (il messaggio dell'errore di rete, stringa
 vuota se una risposta è arrivata; `includes/http.php`). `wmwp_detail_served_stale( string $type = '', int $id = 0 )` dice se
 il dettaglio letto è uscito dalla copia (senza argomenti: almeno uno; con tipo e id: quello). Il JS
@@ -294,8 +338,8 @@ Si usa in quattro modi:
   'label', 'tooltip', 'url', 'ends' ]`: `context` la disegna sotto le altre e fuori dall'inquadratura, `dash` la
   tratteggia, `label` è il testo lungo la linea, `url` la scheda che si apre al clic, `ends` (`true` o `[ 'start' =>
   '…', 'end' => '…' ]`, le etichette del tooltip; di base «Partenza» e «Arrivo» tradotte) mette un cerchio verde
-  all'inizio e una bandiera a scacchi alla fine, come la mappa di GeoHub dei siti Drupal; in un anello, con la fine
-  entro 50 m dall'inizio, solo la partenza. I due segni hanno raggio 15, come il cerchio di GeoHub e più dei punti
+  all'inizio e una bandiera a scacchi alla fine, come la mappa di GeoHub dei siti Drupal; in un anello solo la
+  partenza: l'anello lo dice `roundtrip` della traccia, e senza quel campo la fine entro 50 m dall'inizio. I due segni hanno raggio 15, come il cerchio di GeoHub e più dei punti
   (raggio 9): un punto sopra lascia vedere l'anello intorno. Ogni punto è `[ 'coordinates' => [ lon,
   lat ], 'color', 'number', 'tooltip', 'url' ]`: con `number` il punto è più grande e porta il numero al centro, per
   legarlo alla legenda che stampa il tema. Le geometrie delle tracce si leggono da `api/ec/track/multiple`; i colori
@@ -327,15 +371,18 @@ numero. Il plugin non ha ancora un foglio di stile della ricerca; quando ci sar�
 (`<origin dello shard>/api/app/webmapp/<app id>/config.json`), la stessa che la webapp mostra per prima: per Forestas
 la carta Webmapp, `https://api.webmapp.it/tiles/{z}/{x}/{y}.png`, con «© Webmapp © OpenStreetMap». Le tile Webmapp
 arrivano allo zoom 16 (il 17 risponde 404): oltre si ingrandiscono, e la vista si ferma al `MAP.maxZoom` dell'app. Il
-`config.json` si legge una volta al giorno (`wmwp_map_tiles()`, transient); se lo shard non risponde resta
-OpenStreetMap e si riprova dopo un'ora. Il tema cambia la carta con il filter **`wp_package_map_tiles`**
+`config.json` lo scarica WP-Cron ogni ora, con richiesta condizionale, e mappa e ricerca leggono la stessa copia
+(`wmwp_app_config()`, oc:9018): una pagina non chiama mai lo shard. Senza copia (sito appena installato, prima del
+giro del cron) resta OpenStreetMap; se lo shard non risponde resta l'ultima copia buona. Il tema cambia la carta con il filter **`wp_package_map_tiles`**
 (`['url' => …, 'maxZoom' => …, 'attributions' => …, 'viewMaxZoom' => …]`, o `[]` per OpenStreetMap); per una carta
 diversa da quella Webmapp l'attribuzione la scrive il tema.
 
 **Colori dei layer.** Dallo stesso `config.json` il plugin legge i colori dei layer dell'app (`MAP.layers[].style.color`,
 nell'ordine dell'app), con cui la webapp disegna le tracce: per Forestas Sentieri `#de1b0d`, Itinerari `#608d0d`,
-Cammini `#1a416f`, Sentieri Accessibili `#e100ff`. Ogni traccia prende il colore del primo layer colorato a cui
-appartiene (`properties.layers`, che `api/ec/track/multiple` restituisce). Il tema li cambia, o ne cambia l'ordine, con
+Cammini `#1a416f`, Sentieri Accessibili `#e100ff`. Ogni traccia prende il suo `strokeColor` se non è vuoto, altrimenti
+il colore del primo layer colorato a cui appartiene, nell'ordine dell'app (`properties.layers`, che
+`api/ec/track/multiple` restituisce). Non è la regola delle app (map-core usa il primo layer della traccia e, senza
+colore, il rosso di default): su Forestas il primo layer è quasi sempre un'area catastale senza colore (oc:9018). Il tema li cambia, o ne cambia l'ordine, con
 il filter **`wp_package_map_layer_colors`** (`[['id' => 11, 'color' => '#de1b0d'], …]`).
 
 Lo stile viene dalle `properties` di ogni feature: linee `strokeColor`, `strokeWidth`, `strokeDash`, `lineLabel`
@@ -479,10 +526,16 @@ non possono essere query var di WordPress, `detail-index.php`, `detail-base.php`
 dettaglio (slug, basi, cache dell'indice con lo shard finto, risoluzione e redirect, controllo dell'elemento, meta,
 sitemap e hreflang, storico dei percorsi); `detail-data.php` le letture dei dati del dettaglio, `detail-kind.php` il
 tipo delle tracce dal filtro `wmwp_track_kind_taxonomy` (base e indice), `detail-status.php` percorribilità e avviso,
-`status.php` il registro degli stati e le tacche, `search-pois.php` la source dei POI (copia e rotta `wmwp/v1/pois`).
-I test che toccano l'indice (`detail-aws`, `detail-base`, `detail-cache`, `detail-history`, `detail-index`,
+`status.php` il registro degli stati e le tacche, `search-pois.php` la source dei POI (copia e rotta `wmwp/v1/pois`),
+`app-config.php` il `config.json` scaricato dal cron, `app-filters.php` i filtri dal `config.json`, `app-overlays.php`
+aree degli overlay e appartenenza dei POI, `detail-legacy.php` gli indirizzi vecchi nello storico, `detail-print.php`
+l'indirizzo della scheda PDF (oc:9018).
+I test che toccano l'indice (`detail-aws`, `detail-base`, `detail-cache`, `detail-history`, `detail-index`, `detail-legacy`,
 `detail-render`, `detail-route`, `detail-seo`, `detail-sitemap` e `search-pois.php`) girano sul sito vero e includono
 `history-sandbox.php`, che fa usare allo storico una tabella di prova cancellata alla fine, anche se il test si
-interrompe, così le righe di prova non riservano percorsi agli elementi veri; `detail-data.php`, `detail-kind.php` e
+interrompe, così le righe di prova non riservano percorsi agli elementi veri. Un test che scrive option vere (copia
+del `config.json`, overlay, stato dell'indice) le rimette com'erano anche se si interrompe con un errore, con
+`set_exception_handler`: con un errore fatale WordPress chiude il processo prima delle funzioni di shutdown, e il sito
+resterebbe sui dati di prova (oc:9018); `detail-data.php`, `detail-kind.php` e
 `detail-status.php` non la includono. Test e sorgente della mappa restano fuori dall'archivio del repo
 (`.gitattributes`).

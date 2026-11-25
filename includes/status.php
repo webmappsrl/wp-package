@@ -26,14 +26,17 @@ function wmwp_walkability_taxonomy(): string {
 }
 
 /**
- * Famiglie a stati: identifier → stato di assenza (null se la famiglia non ce l'ha) e stati in ordine, ciascuno con i
- * nomi per lingua.
+ * Famiglie a stati: identifier → stato di assenza (null se la famiglia non ce l'ha) e stati in ordine. Il nome per
+ * lingua (`name`) ce l'ha solo lo stato di assenza; gli altri lo prendono dai termini dello shard (oc:9018).
  *
- * @return array<string, array{absent: ?string, states: list<array{identifier: string, name: array<string, string>}>}>
+ * @return array<string, array{absent: ?string, states: list<array{identifier: string, name?: array<string, string>}>}>
  */
 function wmwp_status_families(): array {
 	$walkability = wmwp_walkability_taxonomy();
-	// Gli stati di osm2cai, come li crea wm-package: prima l'assenza di informazione, poi dal peggiore al migliore
+	// Gli stati di osm2cai, come li crea wm-package: prima l'assenza di informazione, poi dal peggiore al migliore. Solo
+	// ordine e stato di assenza: nomi e icone arrivano con i termini dello shard (oc:9018). Resta il nome dello stato di
+	// assenza, ripiego dichiarato: un percorso senza stato non porta il termine, e nessuna API pubblica l'elenco degli
+	// stati di una famiglia. Si toglie quando lo shard lo pubblica o assegna lo stato di assenza ai percorsi senza stato
 	$families = [
 		$walkability => [
 			'absent' => $walkability . '-unknown',
@@ -45,27 +48,9 @@ function wmwp_status_families(): array {
 						'en' => 'Unknown',
 					],
 				],
-				[
-					'identifier' => $walkability . '-not-walkable',
-					'name'       => [
-						'it' => 'Non percorribile',
-						'en' => 'Not walkable',
-					],
-				],
-				[
-					'identifier' => $walkability . '-partially-walkable',
-					'name'       => [
-						'it' => 'Parzialmente percorribile',
-						'en' => 'Partially walkable',
-					],
-				],
-				[
-					'identifier' => $walkability . '-walkable',
-					'name'       => [
-						'it' => 'Percorribile',
-						'en' => 'Walkable',
-					],
-				],
+				[ 'identifier' => $walkability . '-not-walkable' ],
+				[ 'identifier' => $walkability . '-partially-walkable' ],
+				[ 'identifier' => $walkability . '-walkable' ],
 			],
 		],
 	];
@@ -102,7 +87,8 @@ function wmwp_status_level( string $family, ?string $identifier ): array {
 }
 
 /**
- * Nome di uno stato del registro nella lingua, con ripiego (wmwp_text()); vuoto per uno stato che il registro non ha.
+ * Nome di uno stato del registro nella lingua, con ripiego (wmwp_text()); vuoto per uno stato che il registro non ha o
+ * che nel registro non ha nome (il nome arriva con il termine dello shard, oc:9018).
  *
  * @return array{text: string, lang: ?string}
  */

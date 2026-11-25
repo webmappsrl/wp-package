@@ -14,17 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const WMWP_MAP_SHORTCODE = 'wmwp_map';
-const WMWP_MAP_CONFIG_CACHE_PREFIX = 'wmwp_map_config_';
 // Le tile Webmapp (api.webmapp.it/tiles) arrivano allo zoom 16: il 17 risponde 404 (verificato il 10/11 su 10 punti
 // della Sardegna, il 16 c'era su tutti). Oltre, OpenLayers ingrandisce le tile del 16
 const WMWP_WEBMAPP_TILES_MAX_ZOOM = 16;
-
-/** Indirizzo del config.json dell'app configurata, la stessa configurazione che legge la webapp ('' senza shard o app). */
-function wmwp_app_config_url(): string {
-	$origin = wmwp_configured_api_urls()['origin'];
-	$app_id = (int) get_option( WMWP_OPTION_APP_ID, 0 );
-	return ( '' !== $origin && $app_id > 0 ) ? $origin . '/api/app/webmapp/' . $app_id . '/config.json' : '';
-}
 
 /**
  * Carta di base dal config.json di un'app: la prima voce di `MAP.tiles` (`[{ "webmapp": "https://…/{z}/{x}/{y}.png" }]`),
@@ -89,42 +81,24 @@ function wmwp_parse_map_layer_colors( array $config ): array {
 }
 
 /**
- * Carta di base e colori dei layer dell'app configurata, letti dal suo config.json e tenuti in cache un giorno (un'ora
- * se lo shard non risponde, così una pagina non aspetta ogni volta il timeout).
+ * Carta di base e colori dei layer dell'app configurata, dalla copia del suo config.json (wmwp_app_config(),
+ * scaricata da WP-Cron, oc:9018). Senza copia: OpenStreetMap e nessun colore, finché il cron non l'ha scaricata.
+ * La transient con prefisso `wmwp_map_config_` era la cache di prima della 0.6.0: non si legge più, e scade da sola.
  *
  * @return array{tiles: array, layer_colors: array}
  */
 function wmwp_app_map_config(): array {
-	$empty = [
-		'tiles'        => [],
-		'layer_colors' => [],
-	];
-	$url   = wmwp_app_config_url();
-	if ( '' === $url ) {
-		return $empty;
+	$config = wmwp_app_config();
+	if ( null === $config ) {
+		return [
+			'tiles'        => [],
+			'layer_colors' => [],
+		];
 	}
-	$key    = WMWP_MAP_CONFIG_CACHE_PREFIX . md5( $url );
-	$cached = get_transient( $key );
-	if ( is_array( $cached ) && isset( $cached['tiles'], $cached['layer_colors'] ) ) {
-		return $cached;
-	}
-	// Lo legge il server: all'indirizzo con cui WordPress raggiunge lo shard (wmwp_server_origin), che può non essere
-	// quello del browser
-	$response = wp_remote_get( wmwp_server_url( $url ), [ 'timeout' => 5 ] );
-	$config   = ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) )
-		? json_decode( wp_remote_retrieve_body( $response ), true )
-		: null;
-	if ( ! is_array( $config ) ) {
-		error_log( 'WP Package: config.json dell\'app non disponibile da ' . $url . ', la mappa usa OpenStreetMap' );
-		set_transient( $key, $empty, HOUR_IN_SECONDS );
-		return $empty;
-	}
-	$map = [
+	return [
 		'tiles'        => wmwp_parse_map_tiles( $config ),
 		'layer_colors' => wmwp_parse_map_layer_colors( $config ),
 	];
-	set_transient( $key, $map, DAY_IN_SECONDS );
-	return $map;
 }
 
 /** Carta di base della mappa (wmwp_parse_map_tiles); il tema la cambia con il filter `wp_package_map_tiles`. */

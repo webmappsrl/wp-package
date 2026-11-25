@@ -41,7 +41,14 @@
     return value === null || value === undefined ? '' : String(value).trim();
   }
 
+  // Colore della linea (oc:9018): lo `strokeColor` del percorso se non è vuoto, poi il primo layer colorato nell'ordine
+  // dell'app. Non è la regola delle app (map-core usa `layers[0]` e, senza colore, il rosso di default): su Forestas il
+  // primo layer è quasi sempre un'area catastale senza colore, e un itinerario verrebbe rosso
   function layerColor(feature, layerColors) {
+    var own = text(feature.properties && feature.properties.strokeColor);
+    if (own) {
+      return own;
+    }
     var layers = (feature.properties && feature.properties.layers) || [];
     for (var i = 0; i < (layerColors || []).length; i++) {
       if (layers.indexOf(layerColors[i].id) !== -1) {
@@ -128,7 +135,7 @@
       }
       out.push({ type: 'Feature', geometry: feature.geometry, properties: properties });
       if (track.ends) {
-        ends = ends.concat(endpoints(feature.geometry, track.ends));
+        ends = ends.concat(endpoints(feature.geometry, track.ends, feature.properties.roundtrip));
       }
     });
     out = out.concat(ends);
@@ -166,8 +173,9 @@
     return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
   }
 
-  // Punti di partenza e arrivo di una LineString o MultiLineString (prima e ultima linea)
-  function endpoints(geometry, labels) {
+  // Punti di partenza e arrivo di una LineString o MultiLineString (prima e ultima linea). L'anello lo dice lo shard
+  // (`roundtrip`, oc:9018): in un anello solo la partenza; senza `roundtrip`, anello se la fine è entro 50 m dall'inizio
+  function endpoints(geometry, labels, roundtrip) {
     var lines = geometry && geometry.type === 'MultiLineString' ? geometry.coordinates
       : (geometry && geometry.type === 'LineString' ? [geometry.coordinates] : []);
     lines = (lines || []).filter(function (line) { return line && line.length; });
@@ -184,7 +192,8 @@
       };
     };
     var out = [point(first, 'start', labels.start)];
-    if (meters(first, last) > 50) {
+    var loop = typeof roundtrip === 'boolean' ? roundtrip : meters(first, last) <= 50;
+    if (!loop) {
       out.push(point(last, 'end', labels.end));
     }
     return out;

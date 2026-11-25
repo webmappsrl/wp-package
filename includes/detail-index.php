@@ -24,8 +24,13 @@ function wmwp_detail_text( $names, string $lang ): string {
 	return wmwp_text( is_array( $names ) ? array_filter( $names, 'is_scalar' ) : $names, $lang )['text'];
 }
 
-/** Percorso `<base>/<slug>` della richiesta in forma canonica: minuscolo, senza barre ai lati. */
+/**
+ * Percorso `<base>/<slug>` della richiesta in forma canonica: minuscolo, senza barre ai lati, con i caratteri non ASCII
+ * codificati come li codificano il browser e sanitize_title() (`’` → `%e2%80%99`, oc:9018): un indirizzo vecchio con il
+ * carattere vero e lo stesso indirizzo codificato sono lo stesso percorso.
+ */
 function wmwp_detail_normalize_path( string $path ): string {
+	$path = (string) preg_replace_callback( '/[^\x00-\x7F]+/', fn( array $match ): string => rawurlencode( $match[0] ), $path );
 	return trim( strtolower( $path ), '/' );
 }
 
@@ -280,6 +285,31 @@ const WMWP_DETAIL_RETRY_AFTER = 120;
 // Timeout delle richieste: il dettaglio di un elemento e le due liste dell'indice
 const WMWP_DETAIL_TIMEOUT      = 5;
 const WMWP_DETAIL_LIST_TIMEOUT = 10;
+// Indirizzi vecchi (oc:9018): elementi già passati (`<tipo>:<chiave>`), e quanti dettagli dei percorsi si leggono al più
+// in un giro per prenderne l'indirizzo vecchio
+const WMWP_DETAIL_LEGACY_OPTION  = 'wmwp_detail_legacy_done';
+const WMWP_DETAIL_LEGACY_BATCH   = 100;
+const WMWP_DETAIL_LEGACY_SECONDS = 60;
+// Un dettaglio che non si legge (shard che non risponde), o senza indirizzo vecchio, si riprova dopo questo tempo:
+// intanto il giro passa agli altri
+const WMWP_DETAIL_LEGACY_FAILED_OPTION = 'wmwp_detail_legacy_failed';
+const WMWP_DETAIL_LEGACY_RETRY         = 6 * HOUR_IN_SECONDS;
+// Un percorso letto senza errori ma senza indirizzo vecchio si riprova al più queste volte (la prima lettura può venire
+// da una copia di prima che lo shard lo scrivesse), poi è passato: è un percorso nuovo, senza indirizzo su Drupal
+const WMWP_DETAIL_LEGACY_EMPTY_TRIES = 3;
+
+/**
+ * Programma la ricostruzione dell'indice (che riscrive anche la copia dei POI) il prima possibile: subito, o alla fine
+ * dell'attesa fra due ricostruzioni (WMWP_DETAIL_REBUILD_INTERVAL), perché un evento girato prima la salterebbe. Una
+ * volta sola, anche con molte richieste.
+ */
+function wmwp_detail_schedule_rebuild(): void {
+	$when = max( time(), (int) get_option( WMWP_DETAIL_REBUILT_AT, 0 ) + WMWP_DETAIL_REBUILD_INTERVAL );
+	$next = wp_next_scheduled( WMWP_DETAIL_CRON_HOOK );
+	if ( false === $next || $next > $when + MINUTE_IN_SECONDS ) {
+		wp_schedule_single_event( $when, WMWP_DETAIL_CRON_HOOK );
+	}
+}
 
 /**
  * JSON di una risposta dello shard (all'indirizzo del server, wmwp_server_url()), o null.
@@ -347,6 +377,8 @@ function wmwp_detail_fetch_items(): ?array {
 				'names'  => $props['name'] ?? null,
 				'kind'   => is_array( $kind ) ? $kind : null,
 				'source' => '' !== $source ? $source : null,
+				// Indirizzi vecchi dalle proprietà di pois.geojson (oc:9018); per i percorsi servono quelle del dettaglio
+				'legacy' => wmwp_detail_legacy_paths_for( 'poi', $props ),
 			];
 		}
 	}
@@ -357,6 +389,184 @@ function wmwp_detail_fetch_items(): ?array {
 	 * @param list<array{type: string, id: int, names: mixed, kind: ?array}> $items
 	 */
 	return (array) apply_filters( 'wmwp_detail_items', $items );
+}
+
+/**
+ * Indirizzi vecchi di un elemento (es. quelli del sito di prima), dal tema con il filtro `wmwp_detail_legacy_paths`:
+ * `[ [ 'lang' => 'it', 'path' => '/sentieri/…' ], … ]`, in forma canonica (wmwp_detail_normalize_path()), solo quelli
+ * `<base>/<slug>`.
+ *
+ * @param array<string, mixed> $props Proprietà dell'elemento (pois.geojson per i POI, dettaglio per i percorsi).
+ * @return list<array{lang: string, path: string}>
+ */
+function wmwp_detail_legacy_paths_for( string $type, array $props ): array {
+	/**
+	 * Indirizzi vecchi di un elemento, da portare con un 301 alla sua pagina.
+	 *
+	 * @param list<array{lang: string, path: string}> $paths
+	 * @param string                                  $type  `track` o `poi`.
+	 * @param array<string, mixed>                    $props Proprietà dell'elemento.
+	 */
+	$paths = (array) apply_filters( 'wmwp_detail_legacy_paths', [], $type, $props );
+	$langs = wmwp_detail_languages();
+	$out   = [];
+	foreach ( $paths as $item ) {
+		$lang = is_array( $item ) ? strtolower( (string) ( $item['lang'] ?? '' ) ) : '';
+		// La lingua del tema (`en`) diventa il codice del sito con lo stesso prefisso (WPML può avere `en-us`)
+		if ( '' !== $lang && ! in_array( $lang, $langs, true ) ) {
+			$lang = (string) ( array_values( array_filter( $langs, fn( $code ) => 0 === strpos( (string) $code, substr( $lang, 0, 2 ) ) ) )[0] ?? '' );
+		}
+		$path = is_array( $item ) ? wmwp_detail_normalize_path( (string) ( $item['path'] ?? '' ) ) : '';
+		if ( '' !== $lang && 1 === substr_count( $path, '/' ) && '/' !== substr( $path, -1 ) && 0 !== strpos( $path, '/' ) ) {
+			$out[] = [
+				'lang' => $lang,
+				'path' => $path,
+			];
+		}
+	}
+	return $out;
+}
+
+/**
+ * Righe dello storico per gli indirizzi vecchi degli elementi che non sono ancora passati (una volta per elemento):
+ * non attuali, con la chiave dell'elemento, solo per i percorsi che né l'indice né lo storico hanno già. Solo elementi
+ * con la chiave della fonte: un id cambia con il reset dello shard. Per i percorsi legge il dettaglio, al più
+ * WMWP_DETAIL_LEGACY_BATCH per giro (gli altri al giro dopo). Scrive le righe e segna gli elementi passati.
+ *
+ * @param list<array<string, mixed>>                           $items   Elementi di wmwp_detail_fetch_items().
+ * @param array<string, mixed>                                 $index   Indice accettato.
+ * @param array<string, array<string, array<string, mixed>>> $history Storico, come wmwp_detail_history_load().
+ */
+function wmwp_detail_legacy_write( array $items, array $index, array $history ): bool {
+	// Senza un tema che dà gli indirizzi vecchi non c'è niente da leggere
+	if ( ! has_filter( 'wmwp_detail_legacy_paths' ) ) {
+		return true;
+	}
+	$started = microtime( true );
+	/**
+	 * Si leggono i dettagli dei percorsi? Solo nel cron e da WP-CLI: una ricostruzione forzata dalla pagina di un
+	 * visitatore (un 404, una copia scaduta) non deve aspettare fino a 100 letture; i percorsi restano al cron.
+	 *
+	 * @param bool $can_read
+	 */
+	$can_read = (bool) apply_filters( 'wmwp_detail_legacy_can_read', wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI ) );
+	$waiting  = false;
+	$done     = (array) get_option( WMWP_DETAIL_LEGACY_OPTION, [] );
+	$failed   = (array) get_option( WMWP_DETAIL_LEGACY_FAILED_OPTION, [] );
+	$fails    = false;
+	$rows     = [];
+	$reads    = 0;
+	$marked   = [];
+	// Le chiavi di elementi che non sono più nell'indice (cancellati, o chiavi di prima di un reset) si tolgono
+	$present = [];
+	foreach ( $items as $item ) {
+		if ( '' !== (string) ( $item['source'] ?? '' ) ) {
+			$present[ $item['type'] . ':' . wmwp_detail_item_key( (string) $item['source'], (int) $item['id'] ) ] = true;
+		}
+	}
+	$pruned = count( $done ) !== count( array_intersect_key( $done, $present ) ) || count( $failed ) !== count( array_intersect_key( $failed, $present ) );
+	$done   = array_intersect_key( $done, $present );
+	$failed = array_intersect_key( $failed, $present );
+	foreach ( $items as $item ) {
+		$source = (string) ( $item['source'] ?? '' );
+		if ( '' === $source ) {
+			continue;
+		}
+		$type = (string) $item['type'];
+		$key  = wmwp_detail_item_key( $source, (int) $item['id'] );
+		if ( isset( $done[ $type . ':' . $key ] ) ) {
+			continue;
+		}
+		$paths = $item['legacy'] ?? null;
+		if ( null === $paths ) {
+			if ( 'track' !== $type ) {
+				continue;
+			}
+			// In una pagina niente letture: le fa il cron
+			if ( ! $can_read ) {
+				$waiting = true;
+				continue;
+			}
+			// Al più WMWP_DETAIL_LEGACY_BATCH letture e WMWP_DETAIL_LEGACY_SECONDS secondi per giro: il resto al giro dopo
+			if ( $reads >= WMWP_DETAIL_LEGACY_BATCH || microtime( true ) - $started > WMWP_DETAIL_LEGACY_SECONDS ) {
+				continue;
+			}
+			// Fallito da poco: si riprova più tardi, così non consuma il giro degli altri. Il valore è l'ora del tentativo
+			// e quante letture senza indirizzo ci sono state (un intero, l'ora sola, nelle copie di prima)
+			$entry = $failed[ $type . ':' . $key ] ?? null;
+			$at    = is_array( $entry ) ? (int) ( $entry['at'] ?? 0 ) : (int) $entry;
+			$empty = is_array( $entry ) ? (int) ( $entry['empty'] ?? 0 ) : 0;
+			if ( $at > time() - WMWP_DETAIL_LEGACY_RETRY ) {
+				continue;
+			}
+			++$reads;
+			$feature = wmwp_detail_fetch( $type, (int) $item['id'] );
+			// Un errore, o la copia servita perché la fonte non risponde, non dice niente sull'indirizzo: si riprova
+			if ( is_wp_error( $feature ) || wmwp_detail_served_stale( $type, (int) $item['id'] ) ) {
+				$failed[ $type . ':' . $key ] = [
+					'at'    => time(),
+					'empty' => $empty,
+				];
+				$fails                        = true;
+				continue;
+			}
+			$paths = wmwp_detail_legacy_paths_for( $type, (array) ( $feature['properties'] ?? [] ) );
+			// Senza indirizzo vecchio (es. una copia del dettaglio di prima che lo shard lo scrivesse) si riprova, perché
+			// il dato può arrivare dopo; dopo WMWP_DETAIL_LEGACY_EMPTY_TRIES letture così è passato, senza righe
+			if ( ! $paths ) {
+				++$empty;
+				$fails = true;
+				if ( $empty >= WMWP_DETAIL_LEGACY_EMPTY_TRIES ) {
+					unset( $failed[ $type . ':' . $key ] );
+					$marked[ $type . ':' . $key ] = true;
+				} else {
+					$failed[ $type . ':' . $key ] = [
+						'at'    => time(),
+						'empty' => $empty,
+					];
+				}
+				continue;
+			}
+			unset( $failed[ $type . ':' . $key ] );
+		}
+		foreach ( (array) $paths as $legacy ) {
+			$lang = $legacy['lang'];
+			$path = $legacy['path'];
+			if ( isset( $history[ $lang ][ $path ] ) || isset( $index['paths'][ $lang ][ $path ] ) ) {
+				continue;
+			}
+			[ $base, $slug ]          = wmwp_detail_split_path( $path );
+			$history[ $lang ][ $path ] = true;
+			$rows[]                    = [
+				'lang'    => $lang,
+				'path'    => $path,
+				'type'    => $type,
+				'key'     => $key,
+				'base'    => $base,
+				'root'    => $slug,
+				'suffix'  => 0,
+				'current' => false,
+			];
+		}
+		// Solo i percorsi: i POI hanno gli indirizzi in pois.geojson e si ricalcolano a ogni giro, senza letture (le righe
+		// che lo storico ha già non si riscrivono)
+		if ( 'track' === $type ) {
+			$marked[ $type . ':' . $key ] = true;
+		}
+	}
+	if ( $fails || $marked || $pruned ) {
+		update_option( WMWP_DETAIL_LEGACY_FAILED_OPTION, $failed, false );
+	}
+	if ( $waiting ) {
+		wmwp_detail_schedule_rebuild();
+	}
+	if ( ! wmwp_detail_history_write( $rows ) ) {
+		return false;
+	}
+	if ( $marked || $pruned ) {
+		update_option( WMWP_DETAIL_LEGACY_OPTION, $done + $marked, false );
+	}
+	return true;
 }
 
 /** Una ricostruzione forzata è permessa se l'ultima ha più di WMWP_DETAIL_REBUILD_INTERVAL secondi. */
@@ -510,6 +720,13 @@ function wmwp_detail_index_rebuild( ?array $guard, string $config ): ?array {
 	$written = wmwp_detail_history_write( $seed ) && wmwp_detail_history_write( wmwp_detail_history_changes( $history, (array) $assignments ) );
 	if ( $written && get_option( WMWP_DETAIL_PATHS_SEED_OPTION, 0 ) ) {
 		delete_option( WMWP_DETAIL_PATHS_SEED_OPTION );
+	}
+	// Indirizzi vecchi degli elementi nuovi (oc:9018), dopo le righe dell'indice: non prendono mai un percorso già dato
+	if ( $written ) {
+		$current = wmwp_detail_history_load();
+		if ( null !== $current ) {
+			wmwp_detail_legacy_write( $items, $index, $current );
+		}
 	}
 	// Le basi in un'opzione piccola caricata sempre: le regole di rewrite (init) non leggono l'indice intero
 	update_option( WMWP_DETAIL_BASES_OPTION, wmwp_detail_rule_bases( $index ), true );
